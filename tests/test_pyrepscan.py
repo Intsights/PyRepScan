@@ -146,6 +146,71 @@ class RulesManagerTestCase(
             ],
         )
 
+    def test_add_rule_three(
+        self,
+    ):
+        rules_manager = pyrepscan.RulesManager()
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.add_rule(
+                name='rule_one',
+                regex_pattern=r'(',
+                regex_blacklist_patterns=[],
+            )
+
+        self.assertEqual(
+            first='Invalid matching regex pattern: "("',
+            second=str(context.exception),
+        )
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.add_rule(
+                name='rule_one',
+                regex_pattern=r'regex_pattern_without_capturing_group',
+                regex_blacklist_patterns=[],
+            )
+
+        self.assertEqual(
+            first='Matching regex pattern must have exactly one capturing group: "regex_pattern_without_capturing_group"',
+            second=str(context.exception),
+        )
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.add_rule(
+                name='rule_two',
+                regex_pattern=r'(content)',
+                regex_blacklist_patterns=[
+                    '(',
+                ],
+            )
+
+        self.assertEqual(
+            first='Invalid blacklist regex pattern: "("',
+            second=str(context.exception),
+        )
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.add_rule(
+                name='rule_two',
+                regex_pattern=r'(content)',
+                regex_blacklist_patterns=[
+                    '(blacklist_regex_with_capturing_group)',
+                ],
+            )
+
+        self.assertEqual(
+            first='Blacklist regex pattern must not have a capturing group: "(blacklist_regex_with_capturing_group)"',
+            second=str(context.exception),
+        )
+
 
 class GitRepositoryScannerTestCase(
     unittest.TestCase,

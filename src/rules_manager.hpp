@@ -18,8 +18,27 @@ class RulesManager {
         std::string regex_pattern,
         std::vector<std::string> regex_blacklist_patterns
     ) {
+        re2::RE2 matching_regex(regex_pattern, re2::RE2::Quiet);
+        if (!matching_regex.ok()) {
+            throw std::runtime_error("Invalid matching regex pattern: \"" + regex_pattern + "\"");
+        }
+        if (matching_regex.NumberOfCapturingGroups() != 1) {
+            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: \"" + regex_pattern + "\"");
+        }
+
+        for (const auto & blacklist_pattern : regex_blacklist_patterns) {
+            re2::RE2 blacklist_regex(blacklist_pattern, re2::RE2::Quiet);
+            if (!blacklist_regex.ok()) {
+                throw std::runtime_error("Invalid blacklist regex pattern: \"" + blacklist_pattern + "\"");
+            }
+            if (blacklist_regex.NumberOfCapturingGroups() != 0) {
+                throw std::runtime_error("Blacklist regex pattern must not have a capturing group: \"" + blacklist_pattern + "\"");
+            }
+        }
+
+
         std::shared_ptr<re2::RE2::Set> blacklist_pattern_set = std::make_shared<re2::RE2::Set>(
-            re2::RE2::DefaultOptions,
+            re2::RE2::Quiet,
             re2::RE2::UNANCHORED
         );
         for (const auto & blacklist_pattern : regex_blacklist_patterns) {
@@ -111,7 +130,7 @@ class RulesManager {
     std::vector<std::shared_ptr<re2::RE2::Set>> rules_blacklists;
     std::vector<std::shared_ptr<re2::RE2>> patterns;
     re2::RE2::Set pattern_set = re2::RE2::Set(
-        re2::RE2::DefaultOptions,
+        re2::RE2::Quiet,
         re2::RE2::UNANCHORED
     );
 };
