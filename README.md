@@ -76,34 +76,55 @@ grs = pyrepscan.GitRepositoryScanner()
 # Adds a specific rule, can be called multiple times or none
 grs.add_rule(
     name='First Rule',
-    regex_pattern=r'''(-----BEGIN PRIVATE KEY-----)''',
-    regex_blacklist_patterns=[],
+    match_pattern=r'''(-----BEGIN PRIVATE KEY-----)''',
+    match_whitelist_patterns=[],
+    match_blacklist_patterns=[],
 )
 # Compiles the rules. Should be called only once after all the rules were added
 grs.compile_rules()
 
 # Add file extensions to ignore during the search
-grs.add_ignored_file_extension('bin')
-grs.add_ignored_file_extension('jpg')
+grs.add_ignored_file_extension(
+    file_extension='bin',
+)
+grs.add_ignored_file_extension(
+    file_extension='jpg',
+)
 
 # Add file paths to ignore during the search. Free text is allowed
-grs.add_ignored_file_path('site-packages')
-grs.add_ignored_file_path('node_modules')
+grs.add_ignored_file_path(
+    file_path='site-packages',
+)
+grs.add_ignored_file_path(
+    file_path='node_modules',
+)
 
 # Scans a repository
-results = grs.scan('/repository/path')
+results = grs.scan(
+    repository_path='/repository/path',
+)
 
 # Results is a list of dicts. Each dict is in the following format:
-# {
-#     'author_email': 'author@email.email',
-#     'author_name': 'Author Name',
-#     'commit_id': '1111111111111111111111111111111111111111',
-#     'commit_message': 'The commit message',
-#     'content': 'The content of the file that has been matched',
-#     'file_path': 'full/file/path',
-#     'match': 'The matched group',
-#     'rule_name': 'First Rule'
-# },
+{
+    'rule_name': 'First Rule',
+    'author_email': 'author@email.email',
+    'author_name': 'Author Name',
+    'commit_id': '1111111111111111111111111111111111111111',
+    'commit_message': 'The commit message',
+    'commit_time': '2020-01-01T00:00:00e',
+    'file_path': 'full/file/path',
+    'file_oid': '47d2739ba2c34690248c8f91b84bb54e8936899a',
+    'match': 'The matched group',
+}
+
+# Fetch the file_oid full content
+file_content = grs.get_file_content(
+    repository_path='/repository/path',
+    file_oid='47d2739ba2c34690248c8f91b84bb54e8936899a',
+)
+
+# file_content
+b'binary data'
 ```
 
 

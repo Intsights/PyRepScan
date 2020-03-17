@@ -73,8 +73,9 @@ class RulesManagerTestCase(
 
         rules_manager.add_rule(
             name='rule_one',
-            regex_pattern=r'([a-z]+)',
-            regex_blacklist_patterns=[],
+            match_pattern=r'([a-z]+)',
+            match_whitelist_patterns=[],
+            match_blacklist_patterns=[],
         )
         rules_manager.compile_rules()
 
@@ -118,8 +119,9 @@ class RulesManagerTestCase(
 
         rules_manager.add_rule(
             name='rule_one',
-            regex_pattern=r'([a-z]+)',
-            regex_blacklist_patterns=[
+            match_pattern=r'([a-z]+)',
+            match_whitelist_patterns=[],
+            match_blacklist_patterns=[
                 r'line',
             ],
         )
@@ -151,13 +153,49 @@ class RulesManagerTestCase(
     ):
         rules_manager = pyrepscan.RulesManager()
 
+        rules_manager.add_rule(
+            name='rule_one',
+            match_pattern=r'([a-z]+)',
+            match_whitelist_patterns=[
+                'second',
+                'third',
+            ],
+            match_blacklist_patterns=[
+                r'line',
+            ],
+        )
+        rules_manager.compile_rules()
+
+        matches = rules_manager.scan_content(
+            content='first line\nsecond line\nthird line',
+        )
+        self.assertEqual(
+            first=matches,
+            second=[
+                {
+                    'match': 'second',
+                    'rule_name': 'rule_one',
+                },
+                {
+                    'match': 'third',
+                    'rule_name': 'rule_one',
+                },
+            ],
+        )
+
+    def test_add_rule_four(
+        self,
+    ):
+        rules_manager = pyrepscan.RulesManager()
+
         with self.assertRaises(
             expected_exception=RuntimeError,
         ) as context:
             rules_manager.add_rule(
                 name='rule_one',
-                regex_pattern=r'(',
-                regex_blacklist_patterns=[],
+                match_pattern=r'(',
+                match_whitelist_patterns=[],
+                match_blacklist_patterns=[],
             )
 
         self.assertEqual(
@@ -170,8 +208,9 @@ class RulesManagerTestCase(
         ) as context:
             rules_manager.add_rule(
                 name='rule_one',
-                regex_pattern=r'regex_pattern_without_capturing_group',
-                regex_blacklist_patterns=[],
+                match_pattern=r'regex_pattern_without_capturing_group',
+                match_whitelist_patterns=[],
+                match_blacklist_patterns=[],
             )
 
         self.assertEqual(
@@ -184,8 +223,9 @@ class RulesManagerTestCase(
         ) as context:
             rules_manager.add_rule(
                 name='rule_two',
-                regex_pattern=r'(content)',
-                regex_blacklist_patterns=[
+                match_pattern=r'(content)',
+                match_whitelist_patterns=[],
+                match_blacklist_patterns=[
                     '(',
                 ],
             )
@@ -200,14 +240,53 @@ class RulesManagerTestCase(
         ) as context:
             rules_manager.add_rule(
                 name='rule_two',
-                regex_pattern=r'(content)',
-                regex_blacklist_patterns=[
+                match_pattern=r'(content)',
+                match_whitelist_patterns=[],
+                match_blacklist_patterns=[
                     '(blacklist_regex_with_capturing_group)',
                 ],
             )
 
         self.assertEqual(
             first='Blacklist regex pattern must not have a capturing group: "(blacklist_regex_with_capturing_group)"',
+            second=str(context.exception),
+        )
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.add_rule(
+                name='rule_two',
+                match_pattern=r'(content)',
+                match_whitelist_patterns=[
+                    '(',
+                ],
+                match_blacklist_patterns=[
+                    'blacklist_regex_with_capturing_group',
+                ],
+            )
+
+        self.assertEqual(
+            first='Invalid match validator regex pattern: "("',
+            second=str(context.exception),
+        )
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.add_rule(
+                name='rule_two',
+                match_pattern=r'(content)',
+                match_whitelist_patterns=[
+                    '(sub)',
+                ],
+                match_blacklist_patterns=[
+                    'blacklist_regex_with_capturing_group',
+                ],
+            )
+
+        self.assertEqual(
+            first='Match validator regex pattern must not have a capturing group: "(sub)"',
             second=str(context.exception),
         )
 
@@ -221,8 +300,9 @@ class GitRepositoryScannerTestCase(
         grs = pyrepscan.GitRepositoryScanner()
         grs.add_rule(
             name='First Rule',
-            regex_pattern=r'''(content)''',
-            regex_blacklist_patterns=[],
+            match_pattern=r'''(content)''',
+            match_whitelist_patterns=[],
+            match_blacklist_patterns=[],
         )
         grs.compile_rules()
 
@@ -254,9 +334,12 @@ class GitRepositoryScannerTestCase(
                     f'{tmpdir}/test_file.cpp',
                 ],
             )
+
             bare_repo.index.commit(
                 message='initial commit',
                 author=test_author,
+                commit_date='2000-01-01T00:00:00',
+                author_date='2000-01-01T00:00:00',
             )
 
             with open(f'{tmpdir}/file.txt', 'w') as tmpfile:
@@ -269,6 +352,8 @@ class GitRepositoryScannerTestCase(
             bare_repo.index.commit(
                 message='edited file',
                 author=test_author,
+                commit_date='2001-01-01T00:00:00',
+                author_date='2001-01-01T00:00:00',
             )
 
             new_branch = bare_repo.create_head('new_branch')
@@ -282,6 +367,8 @@ class GitRepositoryScannerTestCase(
             bare_repo.index.commit(
                 message='edited file in new branch',
                 author=test_author,
+                commit_date='2002-01-01T00:00:00',
+                author_date='2002-01-01T00:00:00',
             )
             bare_repo.head.reference = bare_repo.heads.master
             bare_repo.head.reset(
@@ -300,6 +387,8 @@ class GitRepositoryScannerTestCase(
             bare_repo.index.commit(
                 message='merge from new branch',
                 author=test_author,
+                commit_date='2003-01-01T00:00:00',
+                author_date='2003-01-01T00:00:00',
                 parent_commits=(
                     new_branch.commit,
                     bare_repo.heads.master.commit,
@@ -318,8 +407,9 @@ class GitRepositoryScannerTestCase(
                     {
                         'author_email': 'test@author.email',
                         'author_name': 'Author Name',
-                        'commit_message': 'edited file in new branch',
-                        'content': 'new content from new branch',
+                        'commit_message': 'edited file',
+                        'commit_time': '2001-01-01T00:00:00',
+                        'file_oid': '47d2739ba2c34690248c8f91b84bb54e8936899a',
                         'file_path': 'file.txt',
                         'match': 'content',
                         'rule_name': 'First Rule'
@@ -327,8 +417,9 @@ class GitRepositoryScannerTestCase(
                     {
                         'author_email': 'test@author.email',
                         'author_name': 'Author Name',
-                        'commit_message': 'edited file',
-                        'content': 'new content',
+                        'commit_message': 'edited file in new branch',
+                        'commit_time': '2002-01-01T00:00:00',
+                        'file_oid': '0407a18f7c6802c7e7ddc5c9e8af4a34584383ff',
                         'file_path': 'file.txt',
                         'match': 'content',
                         'rule_name': 'First Rule'
@@ -337,10 +428,33 @@ class GitRepositoryScannerTestCase(
                         'author_email': 'test@author.email',
                         'author_name': 'Author Name',
                         'commit_message': 'initial commit',
-                        'content': 'content',
+                        'commit_time': '2000-01-01T00:00:00',
+                        'file_oid': '6b584e8ece562ebffc15d38808cd6b98fc3d97ea',
                         'file_path': 'file.txt',
                         'match': 'content',
                         'rule_name': 'First Rule'
                     },
                 ],
+            )
+
+            self.assertEqual(
+                first=b'new content',
+                second=grs.get_file_content(
+                    repository_path=tmpdir,
+                    file_oid='47d2739ba2c34690248c8f91b84bb54e8936899a',
+                ),
+            )
+            self.assertEqual(
+                first=b'new content from new branch',
+                second=grs.get_file_content(
+                    repository_path=tmpdir,
+                    file_oid='0407a18f7c6802c7e7ddc5c9e8af4a34584383ff',
+                ),
+            )
+            self.assertEqual(
+                first=b'content',
+                second=grs.get_file_content(
+                    repository_path=tmpdir,
+                    file_oid='6b584e8ece562ebffc15d38808cd6b98fc3d97ea',
+                ),
             )
