@@ -149,6 +149,28 @@ class RulesManager {
         return std::nullopt;
     }
 
+    inline std::vector<std::string> check_pattern(
+        const std::string &content,
+        const std::string &pattern
+    ) {
+        re2::RE2 matching_regex(pattern, re2::RE2::Quiet);
+        if (!matching_regex.ok()) {
+            throw std::runtime_error("Invalid matching regex pattern: \"" + pattern + "\"");
+        }
+        if (matching_regex.NumberOfCapturingGroups() != 1) {
+            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: \"" + pattern + "\"");
+        }
+
+        std::vector<std::string> matches;
+        re2::StringPiece input(content);
+        std::string match;
+        while (re2::RE2::FindAndConsume(&input, matching_regex, &match)) {
+            matches.push_back(match);
+        }
+
+        return matches;
+    }
+
     private:
     std::unordered_set<std::string> ignored_file_extensions;
     std::unordered_set<std::string> ignored_file_paths;

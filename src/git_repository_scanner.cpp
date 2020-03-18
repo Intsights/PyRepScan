@@ -259,6 +259,13 @@ PYBIND11_MODULE(pyrepscan, m) {
             &RulesManager::scan_content,
             "",
             pybind11::arg("content")
+        )
+        .def(
+            "check_pattern",
+            &RulesManager::check_pattern,
+            "",
+            pybind11::arg("content"),
+            pybind11::arg("pattern")
         );
 
     pybind11::class_<GitRepositoryScanner>(m, "GitRepositoryScanner")

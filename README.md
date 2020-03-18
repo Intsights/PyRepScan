@@ -125,6 +125,22 @@ file_content = grs.get_file_content(
 
 # file_content
 b'binary data'
+
+# Creating a RulesManager directly
+rules_manager = pyrepscan.RulesManager()
+
+# For testing purposes, check your regexes pattern using check_pattern function
+rules_manager.check_pattern(
+    content='some content1 to check, another content2 in the same line\nanother content3 in another line\n',
+    pattern=r'(content\d)',
+)
+
+# Results are the list of captured matches
+[
+    'content1',
+    'content2',
+    'content3',
+]
 ```
 
 

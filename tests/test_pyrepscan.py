@@ -290,6 +290,61 @@ class RulesManagerTestCase(
             second=str(context.exception),
         )
 
+    def test_check_pattern(
+        self,
+    ):
+        rules_manager = pyrepscan.RulesManager()
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.check_pattern(
+                content='some content to check',
+                pattern=r'content',
+            )
+
+        self.assertEqual(
+            first='Matching regex pattern must have exactly one capturing group: "content"',
+            second=str(context.exception),
+        )
+
+        with self.assertRaises(
+            expected_exception=RuntimeError,
+        ) as context:
+            rules_manager.check_pattern(
+                content='some content to check',
+                pattern=r'(content',
+            )
+
+        self.assertEqual(
+            first='Invalid matching regex pattern: "(content"',
+            second=str(context.exception),
+        )
+
+        self.assertEqual(
+            first=rules_manager.check_pattern(
+                content='some content to check, another content in the same line\nanother content in another line\n',
+                pattern=r'(content)',
+            ),
+            second=[
+                'content',
+                'content',
+                'content',
+            ],
+        )
+
+        self.assertEqual(
+            first=rules_manager.check_pattern(
+                content='some content1 to check, another content2 in the same line\nanother content3 in another line\n',
+                pattern=r'(content\d)',
+            ),
+            second=[
+                'content1',
+                'content2',
+                'content3',
+            ],
+        )
+
 
 class GitRepositoryScannerTestCase(
     unittest.TestCase,
