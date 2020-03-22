@@ -49,7 +49,8 @@ class GitRepositoryScanner {
     }
 
     std::vector<std::map<std::string, std::string>> scan(
-        std::string repository_path
+        std::string repository_path,
+        std::string branch_glob_pattern
     ) {
         git_repository * git_repo = nullptr;
         git_revwalk * repo_revwalk = nullptr;
@@ -58,15 +59,15 @@ class GitRepositoryScanner {
         std::vector<std::map<std::string, std::string>> results;
         std::mutex results_mutex;
 
-        if(0 != git_repository_open(&git_repo, repository_path.c_str())) {
+        if (0 != git_repository_open(&git_repo, repository_path.c_str())) {
             throw std::runtime_error("could not open repository");
         }
 
         git_revwalk_new(&repo_revwalk, git_repo);
-        git_revwalk_sorting(repo_revwalk, GIT_SORT_TOPOLOGICAL);
-        git_revwalk_push_head(repo_revwalk);
+        git_revwalk_sorting(repo_revwalk, GIT_SORT_TIME);
+        git_revwalk_push_glob(repo_revwalk, branch_glob_pattern.c_str());
 
-        while(git_revwalk_next(&oid, repo_revwalk) == 0) {
+        while (git_revwalk_next(&oid, repo_revwalk) == 0) {
             oids.push_back(oid);
         }
 
@@ -93,7 +94,7 @@ class GitRepositoryScanner {
                 }
 
                 const git_oid * current_commit_id = git_commit_id(current_commit);
-                char current_commit_id_string[41] = {};
+                char current_commit_id_string[41] = {0};
                 git_oid_fmt(current_commit_id_string, current_commit_id);
 
                 const git_signature * current_commit_author = git_commit_author(current_commit);
@@ -140,7 +141,7 @@ class GitRepositoryScanner {
                         auto matches = this->rules_manager.scan_content(content);
                         if (matches.has_value()) {
                             for (auto & match : matches.value()) {
-                                char new_file_oid[41] = {};
+                                char new_file_oid[41] = {0};
                                 git_oid_fmt(new_file_oid, &delta->new_file.id);
 
                                 results_mutex.lock();
@@ -277,7 +278,8 @@ PYBIND11_MODULE(pyrepscan, m) {
             "scan",
             &GitRepositoryScanner::scan,
             "",
-            pybind11::arg("repository_path")
+            pybind11::arg("repository_path"),
+            pybind11::arg("branch_glob_pattern")
         )
         .def(
             "compile_rules",

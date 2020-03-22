@@ -412,6 +412,7 @@ class GitRepositoryScannerTestCase(
             )
 
             new_branch = bare_repo.create_head('new_branch')
+            bare_repo.head.reference = bare_repo.heads[1]
             with open(f'{tmpdir}/file.txt', 'w') as tmpfile:
                 tmpfile.write('new content from new branch')
             bare_repo.index.add(
@@ -450,12 +451,30 @@ class GitRepositoryScannerTestCase(
                 ),
             )
 
+            new_branch = bare_repo.create_head('non_merged_branch')
+            bare_repo.head.reference = bare_repo.heads[2]
+            with open(f'{tmpdir}/file.txt', 'w') as tmpfile:
+                tmpfile.write('new content from non_merged_branch')
+            bare_repo.index.add(
+                items=[
+                    f'{tmpdir}/file.txt',
+                ],
+            )
+            bare_repo.index.commit(
+                message='edited file in non_merged_branch',
+                author=test_author,
+                commit_date='2004-01-01T00:00:00',
+                author_date='2004-01-01T00:00:00',
+            )
+
+            bare_repo.head.reference = bare_repo.heads.master
+
             results = grs.scan(
                 repository_path=tmpdir,
+                branch_glob_pattern='*master',
             )
             for result in results:
                 result.pop('commit_id')
-
             self.assertCountEqual(
                 first=results,
                 second=[
@@ -485,6 +504,58 @@ class GitRepositoryScannerTestCase(
                         'commit_message': 'initial commit',
                         'commit_time': '2000-01-01T00:00:00',
                         'file_oid': '6b584e8ece562ebffc15d38808cd6b98fc3d97ea',
+                        'file_path': 'file.txt',
+                        'match': 'content',
+                        'rule_name': 'First Rule'
+                    },
+                ],
+            )
+
+            results = grs.scan(
+                repository_path=tmpdir,
+                branch_glob_pattern='*',
+            )
+            for result in results:
+                result.pop('commit_id')
+            self.assertCountEqual(
+                first=results,
+                second=[
+                    {
+                        'author_email': 'test@author.email',
+                        'author_name': 'Author Name',
+                        'commit_message': 'edited file',
+                        'commit_time': '2001-01-01T00:00:00',
+                        'file_oid': '47d2739ba2c34690248c8f91b84bb54e8936899a',
+                        'file_path': 'file.txt',
+                        'match': 'content',
+                        'rule_name': 'First Rule'
+                    },
+                    {
+                        'author_email': 'test@author.email',
+                        'author_name': 'Author Name',
+                        'commit_message': 'edited file in new branch',
+                        'commit_time': '2002-01-01T00:00:00',
+                        'file_oid': '0407a18f7c6802c7e7ddc5c9e8af4a34584383ff',
+                        'file_path': 'file.txt',
+                        'match': 'content',
+                        'rule_name': 'First Rule'
+                    },
+                    {
+                        'author_email': 'test@author.email',
+                        'author_name': 'Author Name',
+                        'commit_message': 'initial commit',
+                        'commit_time': '2000-01-01T00:00:00',
+                        'file_oid': '6b584e8ece562ebffc15d38808cd6b98fc3d97ea',
+                        'file_path': 'file.txt',
+                        'match': 'content',
+                        'rule_name': 'First Rule'
+                    },
+                    {
+                        'author_email': 'test@author.email',
+                        'author_name': 'Author Name',
+                        'commit_message': 'edited file in non_merged_branch',
+                        'commit_time': '2004-01-01T00:00:00',
+                        'file_oid': '057032a2108721ad1de6a9240fd1a8f45bc3f2ef',
                         'file_path': 'file.txt',
                         'match': 'content',
                         'rule_name': 'First Rule'

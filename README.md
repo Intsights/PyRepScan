@@ -102,6 +102,7 @@ grs.add_ignored_file_path(
 # Scans a repository
 results = grs.scan(
     repository_path='/repository/path',
+    branch_glob_pattern='*',
 )
 
 # Results is a list of dicts. Each dict is in the following format:
