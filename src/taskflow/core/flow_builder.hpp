@@ -7,28 +7,21 @@ namespace tf {
 /** 
 @class FlowBuilder
 
-@brief Building methods of a task dependency graph.
+@brief building methods of a task dependency graph
 
 */
 class FlowBuilder {
 
-  friend class Task;
+  friend class Executor;
 
   public:
-    
-    /**
-    @brief constructs a flow builder object
-
-    @param graph a task dependency graph to manipulate
-    */
-    FlowBuilder(Graph& graph);
     
     /**
     @brief creates a static task from a given callable object
     
     @tparam C callable type
     
-    @param callable a callable object acceptable to std::function<void()>
+    @param callable a callable object constructible from std::function<void()>
 
     @return Task handle
     */
@@ -40,7 +33,7 @@ class FlowBuilder {
     
     @tparam C callable type
     
-    @param callable a callable object acceptable to std::function<void(Subflow&)>
+    @param callable a callable object constructible from std::function<void(Subflow&)>
 
     @return Task handle
     */
@@ -52,7 +45,7 @@ class FlowBuilder {
     
     @tparam C callable type
     
-    @param callable a callable object acceptable to std::function<int()>
+    @param callable a callable object constructible from std::function<int()>
 
     @return Task handle
     */
@@ -65,7 +58,7 @@ class FlowBuilder {
     
     @tparam C callable type
     
-    @param callable a callable object acceptable to std::function<void(cudaFlow&)>
+    @param callable a callable object constructible from std::function<void(cudaFlow&)>
 
     @return Task handle
     */
@@ -74,11 +67,11 @@ class FlowBuilder {
 #endif 
 
     /**
-    @brief creates multiple tasks from a list of callable objects at one time
+    @brief creates multiple tasks from a list of callable objects
     
     @tparam C... callable types
 
-    @param callables one or multiple callable objects acceptable to std::function
+    @param callables one or multiple callable objects constructible from each task category
 
     @return a Task handle
     */
@@ -96,9 +89,13 @@ class FlowBuilder {
     /**
     @brief constructs a task dependency graph of range-based parallel_for
     
-    The task dependency graph applies a callable object 
-    to the dereferencing of every iterator 
-    in the range [beg, end) chunk by chunk.
+    The task dependency graph applies the callable object
+    @p callable to each object obtained by dereferencing
+    every iterator in the range [beg, end). The range
+    is split into chunks of size @p chunk, where each of them
+    is processed by one Task.
+
+    The callable needs to accept a single argument, the object in the range.
 
     @tparam I input iterator type
     @tparam C callable type
@@ -325,7 +322,7 @@ class FlowBuilder {
     @param others a task set to precede A
     @param A task A
     */
-    void gather(std::vector<Task>& others, Task A);
+    void succeed(std::vector<Task>& others, Task A);
 
     /**
     @brief adds dependency links from many tasks to one task A
@@ -333,11 +330,21 @@ class FlowBuilder {
     @param others a task set to precede A
     @param A task A
     */
-    void gather(std::initializer_list<Task> others, Task A);
+    void succeed(std::initializer_list<Task> others, Task A);
     
-  private:
-
+  protected:
+    
+    /**
+    @brief constructs a flow builder with a graph
+    */
+    FlowBuilder(Graph& graph);
+    
+    /**
+    @brief associated graph object
+    */
     Graph& _graph;
+
+  private:
 
     template <typename L>
     void _linearize(L&);
@@ -347,78 +354,6 @@ class FlowBuilder {
 inline FlowBuilder::FlowBuilder(Graph& graph) :
   _graph {graph} {
 }
-
-// ----------------------------------------------------------------------------
-
-/** 
-@class Subflow
-
-@brief The building blocks of dynamic tasking.
-*/ 
-class Subflow : public FlowBuilder {
-
-  public:
-    
-    /**
-    @brief constructs a subflow builder object
-    */
-    template <typename... Args>
-    Subflow(Args&&... args);
-    
-    /**
-    @brief enables the subflow to join its parent task
-    */
-    void join();
-
-    /**
-    @brief enables the subflow to detach from its parent task
-    */
-    void detach();
-    
-    /**
-    @brief queries if the subflow will be detached from its parent task
-    */
-    bool detached() const;
-
-    /**
-    @brief queries if the subflow will join its parent task
-    */
-    bool joined() const;
-
-  private:
-
-    bool _detached {false};
-};
-
-// Constructor
-template <typename... Args>
-Subflow::Subflow(Args&&... args) :
-  FlowBuilder {std::forward<Args>(args)...} {
-}
-
-// Procedure: join
-inline void Subflow::join() {
-  _detached = false;
-}
-
-// Procedure: detach
-inline void Subflow::detach() {
-  _detached = true;
-}
-
-// Function: detached
-inline bool Subflow::detached() const {
-  return _detached;
-}
-
-// Function: joined
-inline bool Subflow::joined() const {
-  return !_detached;
-}
-
-// ----------------------------------------------------------------------------
-// Member definition of FlowBuilder
-// ----------------------------------------------------------------------------
 
 // Function: emplace
 template <typename... C, std::enable_if_t<(sizeof...(C)>1), void>*>
@@ -440,13 +375,9 @@ std::enable_if_t<is_static_task_v<C>, Task> FlowBuilder::emplace(C&& c) {
 // emplaces a dynamic task
 template <typename C>
 std::enable_if_t<is_dynamic_task_v<C>, Task> FlowBuilder::emplace(C&& c) {
-  auto n = _graph.emplace_back(nstd::in_place_type_t<Node::DynamicWork>{}, 
-  [c=std::forward<C>(c)] (Subflow& fb) mutable {
-    // first time execution
-    if(fb._graph.empty()) {
-      c(fb);
-    }
-  });
+  auto n = _graph.emplace_back(
+    nstd::in_place_type_t<Node::DynamicWork>{}, std::forward<C>(c)
+  );
   return Task(n);
 }
 
@@ -471,40 +402,6 @@ std::enable_if_t<is_cudaflow_task_v<C>, Task> FlowBuilder::emplace(C&& c) {
   return Task(n);
 }
 #endif
-
-//template <typename C>
-//Task FlowBuilder::emplace(C&& c) {
-//
-//  // static task
-//  //if constexpr(is_static_task_v<C>) {
-//  if constexpr (is_invocable_r_v<void, C> && !is_invocable_r_v<int, C>) {
-//    auto n = _graph.emplace_back(
-//      nstd::in_place_type_t<Node::StaticWork>{}, std::forward<C>(c)
-//    );
-//    return Task(n);
-//  }
-//  // condition task
-//  else if constexpr(is_condition_task_v<C>) {
-//    auto n = _graph.emplace_back(
-//      nstd::in_place_type_t<Node::ConditionWork>{}, std::forward<C>(c)
-//    );
-//    return Task(n);
-//  }
-//  // dynamic task
-//  else if constexpr(is_dynamic_task_v<C>) {
-//    auto n = _graph.emplace_back(nstd::in_place_type_t<Node::DynamicWork>{}, 
-//    [c=std::forward<C>(c)] (Subflow& fb) mutable {
-//      // first time execution
-//      if(fb._graph.empty()) {
-//        c(fb);
-//      }
-//    });
-//    return Task(n);
-//  }
-//  else {
-//    static_assert(dependent_false_v<C>, "invalid task work type");
-//  }
-//}
 
 // Function: composed_of    
 inline Task FlowBuilder::composed_of(Taskflow& taskflow) {
@@ -533,15 +430,15 @@ inline void FlowBuilder::broadcast(Task from, std::initializer_list<Task> tos) {
   }
 }
 
-// Function: gather
-inline void FlowBuilder::gather(std::vector<Task>& froms, Task to) {
+// Function: succeed
+inline void FlowBuilder::succeed(std::vector<Task>& froms, Task to) {
   for(auto from : froms) {
     to.succeed(from);
   }
 }
 
-// Function: gather
-inline void FlowBuilder::gather(std::initializer_list<Task> froms, Task to) {
+// Function: succeed
+inline void FlowBuilder::succeed(std::initializer_list<Task> froms, Task to) {
   for(auto from : froms) {
     to.succeed(from);
   }
@@ -960,73 +857,90 @@ std::pair<Task, Task> FlowBuilder::reduce(I beg, I end, T& result, B&& op) {
 }
 
 // ----------------------------------------------------------------------------
-// Cyclic Dependency: Task
-// ----------------------------------------------------------------------------
 
-// Function: work
-// assign a static work
-template <typename C>
-std::enable_if_t<is_static_task_v<C>, Task>& Task::work(C&& c) {
-  _node->_handle.emplace<Node::StaticWork>(std::forward<C>(c));
-  return *this;
+/** 
+@class Subflow
+
+@brief building methods of a subflow graph in dynamic tasking
+
+By default, a subflow automatically joins its parent node. You may explicitly
+join or detach a subflow by calling Subflow::join or Subflow::detach.
+
+*/ 
+class Subflow : public FlowBuilder {
+
+  friend class Executor;
+
+  public:
+    
+    /**
+    @brief enables the subflow to join its parent task
+
+    Performs an immediate action to join the subflow. Once the subflow is joined,
+    it is considered finished and you may not apply any other actions to it.
+    */
+    void join();
+
+    /**
+    @brief enables the subflow to detach from its parent task
+
+    A joined subflow cannot be detached. The subflow will be detached upon leaving
+    its execution context.
+    */
+    void detach();
+    
+    /**
+    @brief queries if the subflow will be detached from its parent task
+    */
+    bool detached() const;
+
+    /**
+    @brief queries if the subflow is joinable
+
+    When a subflow is joined, it becomes not joinable.
+    */
+    bool joinable() const;
+
+  private:
+    
+    Subflow(Executor&, Node*, Graph&);
+
+    Executor& _executor;
+    Node* _parent;
+
+    bool _joined {false};
+    bool _detach {false};
+};
+
+// Constructor
+inline Subflow::Subflow(Executor& executor, Node* parent, Graph& graph) :
+  FlowBuilder {graph},
+  _executor   {executor},
+  _parent     {parent} {
 }
 
-// Function: work
-// assigns a dynamic work
-template <typename C>
-std::enable_if_t<is_dynamic_task_v<C>, Task>& Task::work(C&& c) {
-  _node->_handle.emplace<Node::DynamicWork>( 
-  [c=std::forward<C>(c)] (Subflow& fb) mutable {
-    // first time execution
-    if(fb._graph.empty()) {
-      c(fb);
-    }
-  });
-  return *this;
+// Procedure: detach
+inline void Subflow::detach() {
+  if(_joined) {
+    TF_THROW("subflow already joined");
+  }
+  _detach = true;
 }
 
-// Function: work
-// assigns a condition work
-template <typename C>
-std::enable_if_t<is_condition_task_v<C>, Task>& Task::work(C&& c) {
-  _node->_handle.emplace<Node::ConditionWork>(std::forward<C>(c));
-  return *this;
+// Function: detached
+inline bool Subflow::detached() const {
+  return _detach;
 }
 
+// Function: joined
+inline bool Subflow::joinable() const {
+  return !_joined;
+}
 
-// Function: work
-//template <typename C>
-//Task& Task::work(C&& c) {
-//
-//  // static tasking
-//  if constexpr(is_static_task_v<C>) {
-//    _node->_handle.emplace<Node::StaticWork>(std::forward<C>(c));
-//  }
-//  // condition tasking
-//  else if constexpr(is_condition_task_v<C>) {
-//    _node->_handle.emplace<Node::ConditionWork>(std::forward<C>(c));
-//  }
-//  // dyanmic tasking
-//  else if constexpr(is_dynamic_task_v<C>) {
-//    _node->_handle.emplace<Node::DynamicWork>( 
-//    [c=std::forward<C>(c)] (Subflow& fb) mutable {
-//      // first time execution
-//      if(fb._graph.empty()) {
-//        c(fb);
-//      }
-//    });
-//  }
-//  else {
-//    static_assert(dependent_false_v<C>, "invalid task work type");
-//  }
-//
-//  return *this;
-//}
 
 // ----------------------------------------------------------------------------
 // Legacy code
 // ----------------------------------------------------------------------------
-
 
 using SubflowBuilder = Subflow;
 

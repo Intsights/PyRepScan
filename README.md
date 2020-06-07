@@ -28,14 +28,14 @@
 
 ## About The Project
 
-PyRepScan is a python library written in C++. The library uses [libgit2](https://github.com/libgit2/libgit2) for repository parsing and traversing, [re2](https://github.com/google/re2) for regex pattern matching and [cpp-taskflow](https://github.com/cpp-taskflow/cpp-taskflow) for concurrency. The library was written to achieve high performance and python bindings.
+PyRepScan is a python library written in C++. The library uses [libgit2](https://github.com/libgit2/libgit2) for repository parsing and traversing, [re2](https://github.com/google/re2) for regex pattern matching and [taskflow](https://github.com/taskflow/taskflow) for concurrency. The library was written to achieve high performance and python bindings.
 
 
 ### Built With
 
 * [libgit2](https://github.com/libgit2/libgit2)
 * [re2](https://github.com/google/re2)
-* [cpp-taskflow](https://github.com/cpp-taskflow/cpp-taskflow)
+* [taskflow](https://github.com/taskflow/taskflow)
 
 
 ### Performance

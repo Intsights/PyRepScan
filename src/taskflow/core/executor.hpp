@@ -1,19 +1,5 @@
 #pragma once
 
-#include <iostream>
-#include <vector>
-#include <cstdlib>
-#include <cstdio>
-#include <random>
-#include <atomic>
-#include <memory>
-#include <deque>
-#include <thread>
-#include <algorithm>
-#include <set>
-#include <numeric>
-#include <cassert>
-
 #include "tsq.hpp"
 #include "notifier.hpp"
 #include "observer.hpp"
@@ -21,36 +7,79 @@
 
 namespace tf {
 
-/** @class Executor
 
-@brief The executor class to run a taskflow graph.
+/** @class WorkerView
 
-An executor object manages a set of worker threads and implements 
-an efficient work-stealing scheduling algorithm to run a task graph.
+@brief class to access worker information from the observer interface
 
 */
+//class WorkerView {
+//
+//  friend class Executor;
+//
+//  public:
+//
+//
+//  private:
+//
+//    Worker* _worker;
+//
+//};
 
+
+// ----------------------------------------------------------------------------
+// Executor Definition
+// ----------------------------------------------------------------------------
+
+
+/** @class Executor
+
+@brief execution interface for running a taskflow graph
+
+An executor object manages a set of worker threads and internalements 
+an efficient work-stealing scheduling algorithm to run a taskflow.
+
+*/
 class Executor {
-  
-  struct Worker {
-    unsigned id;
-    std::mt19937 rdgen { std::random_device{}() };
-    TaskQueue<Node*> queue;
-    Node* cache {nullptr};
 
-    int num_executed {0};
+  friend class Subflow;
+
+  struct Worker {
+    size_t id;
+    size_t vtm;
+    Domain domain;
+    Executor* executor;
+    Notifier::Waiter* waiter;
+    std::mt19937 rdgen { std::random_device{}() };
+    TaskQueue<Node*> wsq[NUM_DOMAINS];
   };
     
   struct PerThread {
     Worker* worker {nullptr};
   };
 
+#ifdef TF_ENABLE_CUDA
+  struct cudaDevice {
+    std::vector<cudaStream_t> streams;
+  };
+#endif
+
   public:
-    
+
+#ifdef TF_ENABLE_CUDA    
+    /**
+    @brief constructs the executor with N/M cpu/gpu worker threads
+    */
+    explicit Executor(
+      size_t N = std::thread::hardware_concurrency(),
+      size_t M = cuda_num_devices()
+    );
+#else
     /**
     @brief constructs the executor with N worker threads
     */
-    explicit Executor(unsigned n = std::thread::hardware_concurrency());
+    explicit Executor(size_t N = std::thread::hardware_concurrency());
+#endif
     
     /**
     @brief destructs the executor 
@@ -62,7 +91,7 @@ class Executor {
     
     @param taskflow a tf::Taskflow object
 
-    @return a std::future to access the execution state of the taskflow
+    @return a std::future to access the execution status of the taskflow
     */
     std::future<void> run(Taskflow& taskflow);
 
@@ -72,7 +101,7 @@ class Executor {
     @param taskflow a tf::Taskflow object 
     @param callable a callable object to be invoked after this run
 
-    @return a std::future to access the execution state of the taskflow
+    @return a std::future to access the execution status of the taskflow
     */
     template<typename C>
     std::future<void> run(Taskflow& taskflow, C&& callable);
@@ -83,7 +112,7 @@ class Executor {
     @param taskflow a tf::Taskflow object
     @param N number of runs
 
-    @return a std::future to access the execution state of the taskflow
+    @return a std::future to access the execution status of the taskflow
     */
     std::future<void> run_n(Taskflow& taskflow, size_t N);
 
@@ -94,7 +123,7 @@ class Executor {
     @param N number of runs
     @param callable a callable object to be invoked after this run
 
-    @return a std::future to access the execution state of the taskflow
+    @return a std::future to access the execution status of the taskflow
     */
     template<typename C>
     std::future<void> run_n(Taskflow& taskflow, size_t N, C&& callable);
@@ -106,7 +135,7 @@ class Executor {
     @param taskflow a tf::Taskflow 
     @param pred a boolean predicate to return true for stop
 
-    @return a std::future to access the execution state of the taskflow
+    @return a std::future to access the execution status of the taskflow
     */
     template<typename P>
     std::future<void> run_until(Taskflow& taskflow, P&& pred);
@@ -119,11 +148,11 @@ class Executor {
     @param pred a boolean predicate to return true for stop
     @param callable a callable object to be invoked after this run
 
-    @return a std::future to access the execution state of the taskflow
+    @return a std::future to access the execution status of the taskflow
     */
     template<typename P, typename C>
     std::future<void> run_until(Taskflow& taskflow, P&& pred, C&& callable);
-
+    
     /**
     @brief wait for all pending graphs to complete
     */
@@ -131,31 +160,24 @@ class Executor {
 
     /**
     @brief queries the number of worker threads (can be zero)
-
-    @return the number of worker threads
     */
     size_t num_workers() const;
     
     /**
-    @brief constructs an observer to inspect the activities of worker threads
+    @brief queries the number of running topologies at the time of this call
 
-    Each executor manages at most one observer at a time through std::unique_ptr.
-    Createing multiple observers will only keep the lastest one.
-    
-    @tparam Observer observer type derived from tf::ExecutorObserverInterface
-    @tparam ArgsT... argument parameter pack
-
-    @param args arguments to forward to the constructor of the observer
-    
-    @return a raw pointer to the observer associated with this executor
+    When a taskflow is submitted to an executor, a topology is created to store
+    runtime metadata of the running taskflow.
     */
-    template<typename Observer, typename... Args>
-    Observer* make_observer(Args&&... args);
-    
+    size_t num_topologies() const;
+
     /**
-    @brief removes the associated observer
+    @brief queries the number of worker domains 
+
+    Each domain manages a subset of worker threads to execute domain-specific tasks,
+    for example, HOST tasks and CUDA tasks.
     */
-    void remove_observer();
+    size_t num_domains() const;
 
     /**
     @brief queries the id of the caller thread in this executor
@@ -164,71 +186,170 @@ class Executor {
     If the caller thread does not belong to the executor, -1 is returned.
     */
     int this_worker_id() const;
+    
+    /**
+    @brief constructs an observer to inspect the activities of worker threads
+
+    Each executor manage a list of observers in shared ownership with callers.
+    
+    @tparam Observer observer type derived from tf::ObserverInterface
+    @tparam ArgsT... argument parameter pack
+
+    @param args arguments to forward to the constructor of the observer
+    
+    @return a shared pointer to the created observer
+    */
+    template <typename Observer, typename... Args>
+    std::shared_ptr<Observer> make_observer(Args&&... args);
+    
+    /**
+    @brief removes the associated observer
+    */
+    template <typename Observer>
+    void remove_observer(std::shared_ptr<Observer> observer);
+
+    /**
+    @brief queries the number of observers
+    */
+    size_t num_observers() const;
 
   private:
+    
+    const size_t _VICTIM_BEG;
+    const size_t _VICTIM_END;
+    const size_t _MAX_STEALS;
+    const size_t _MAX_YIELDS;
    
     std::condition_variable _topology_cv;
     std::mutex _topology_mutex;
-    std::mutex _queue_mutex;
+    std::mutex _wsq_mutex;
 
-    unsigned _num_topologies {0};
+    size_t _num_topologies {0};
     
-    // scheduler field
     std::vector<Worker> _workers;
-    std::vector<Notifier::Waiter> _waiters;
     std::vector<std::thread> _threads;
 
-    TaskQueue<Node*> _queue;
-
-    std::atomic<size_t> _num_actives {0};
-    std::atomic<size_t> _num_thieves {0};
-    std::atomic<bool>   _done        {0};
-
-    Notifier _notifier;
+#ifdef TF_ENABLE_CUDA
+    std::vector<cudaDevice> _cuda_devices;
+#endif
     
-    std::unique_ptr<ExecutorObserverInterface> _observer;
-    
-    unsigned _find_victim(unsigned);
+    Notifier _notifier[NUM_DOMAINS];
 
+    TaskQueue<Node*> _wsq[NUM_DOMAINS];
+
+    size_t _id_offset[NUM_DOMAINS] = {0};
+
+    std::atomic<size_t> _num_actives[NUM_DOMAINS];
+    std::atomic<size_t> _num_thieves[NUM_DOMAINS];
+    std::atomic<bool>   _done {0};
+    
+    std::unordered_set<std::shared_ptr<ObserverInterface>> _observers;
+
+    TFProfObserver* _tfprof;
+    
     PerThread& _per_thread() const;
 
     bool _wait_for_task(Worker&, Node*&);
     
-    void _spawn(unsigned);
+    void _instantiate_tfprof();
+    void _flush_tfprof();
+    void _observer_prologue(Worker&, Node*);
+    void _observer_epilogue(Worker&, Node*);
+    void _spawn(size_t, Domain);
+    void _worker_loop(Worker&);
     void _exploit_task(Worker&, Node*&);
     void _explore_task(Worker&, Node*&);
-    void _schedule(Node*, bool);
+    void _schedule(Node*);
     void _schedule(PassiveVector<Node*>&);
     void _invoke(Worker&, Node*);
     void _invoke_static_work(Worker&, Node*);
-    void _invoke_dynamic_work(Worker&, Node*, Subflow&);
-    void _invoke_condition_work(Worker&, Node*, int&);
+    void _invoke_dynamic_work(Worker&, Node*);
+    void _invoke_dynamic_work_internal(Worker&, Node*, Graph&, bool);
+    void _invoke_dynamic_work_external(Graph&, Node*);
+    void _invoke_condition_work(Worker&, Node*);
+    void _invoke_module_work(Worker&, Node*);
 
 #ifdef TF_ENABLE_CUDA
     void _invoke_cudaflow_work(Worker&, Node*);
-    void _invoke_cudaflow_work_impl(Worker&, Node*);
+    void _invoke_cudaflow_work_internal(Worker&, Node*);
 #endif
 
-    void _set_up_module_work(Node*, bool&);
     void _set_up_topology(Topology*);
-    void _tear_down_topology(Topology**); 
+    void _tear_down_topology(Topology*); 
     void _increment_topology();
     void _decrement_topology();
     void _decrement_topology_and_notify();
 };
 
+
+#ifdef TF_ENABLE_CUDA
 // Constructor
-inline Executor::Executor(unsigned N) : 
-  _workers  {N},
-  _waiters  {N},
-  _notifier {_waiters} {
-  
+inline Executor::Executor(size_t N, size_t M) :
+  _VICTIM_BEG   {0},
+  _VICTIM_END   {N + M - 1},
+  _MAX_STEALS   {(N + M + 1) << 1},
+  _MAX_YIELDS   {100},
+  _workers      {N + M},
+  _cuda_devices {cuda_num_devices()},
+  _notifier     {Notifier(N), Notifier(M)} {
+
   if(N == 0) {
-    TF_THROW("no workers to execute the graph");
+    TF_THROW("no cpu workers to execute taskflows");
   }
 
-  _spawn(N);
+  if(M == 0) {
+    TF_THROW("no gpu workers to execute cudaflows");
+  }
+
+  for(int i=0; i<NUM_DOMAINS; ++i) {
+    _num_actives[i].store(0, std::memory_order_relaxed);
+    _num_thieves[i].store(0, std::memory_order_relaxed); 
+  }
+  
+  // create a per-worker stream on each cuda device
+  for(size_t i=0; i<_cuda_devices.size(); ++i) {
+    _cuda_devices[i].streams.resize(M);
+    cudaScopedDevice ctx(i);
+    for(size_t m=0; m<M; ++m) {
+      TF_CHECK_CUDA(
+        cudaStreamCreate(&(_cuda_devices[i].streams[m])),
+        "failed to create a cudaStream for worker ", m, " on device ", i
+      );
+    }
+  }
+
+  _spawn(N, HOST);
+  _spawn(M, CUDA);
+
+  // initiate the observer if requested
+  _instantiate_tfprof();
 }
+
+#else
+// Constructor
+inline Executor::Executor(size_t N) : 
+  _VICTIM_BEG {0},
+  _VICTIM_END {N - 1},
+  _MAX_STEALS {(N + 1) << 1},
+  _MAX_YIELDS {100},
+  _workers    {N},
+  _notifier   {Notifier(N)} {
+  
+  if(N == 0) {
+    TF_THROW("no cpu workers to execute taskflows");
+  }
+  
+  for(int i=0; i<NUM_DOMAINS; ++i) {
+    _num_actives[i].store(0, std::memory_order_relaxed);
+    _num_thieves[i].store(0, std::memory_order_relaxed); 
+  }
+
+  _spawn(N, HOST);
+
+  // instantite the default observer if requested
+  _instantiate_tfprof();
+}
+#endif
 
 // Destructor
 inline Executor::~Executor() {
@@ -238,16 +359,59 @@ inline Executor::~Executor() {
   
   // shut down the scheduler
   _done = true;
-  _notifier.notify(true);
+
+  for(int i=0; i<NUM_DOMAINS; ++i) {
+    _notifier[i].notify(true);
+  }
   
   for(auto& t : _threads){
     t.join();
   } 
+  
+#ifdef TF_ENABLE_CUDA  
+  // clean up the cuda streams
+  for(size_t i=0; i<_cuda_devices.size(); ++i) {
+    cudaScopedDevice ctx(i);
+    for(size_t m=0; m<_cuda_devices[i].streams.size(); ++m) {
+      cudaStreamDestroy(_cuda_devices[i].streams[m]);
+    }
+  }
+#endif
+  
+  // flush the default observer
+  _flush_tfprof();
+}
+
+// Procedure: _instantiate_tfprof
+inline void Executor::_instantiate_tfprof() {
+  // TF_OBSERVER_TYPE
+  _tfprof = get_env("TF_ENABLE_PROFILER").empty() ? 
+    nullptr : make_observer<TFProfObserver>().get();
+}
+
+// Procedure: _flush_tfprof
+inline void Executor::_flush_tfprof() {
+  if(_tfprof) {
+    std::ostringstream fpath;
+    fpath << get_env("TF_ENABLE_PROFILER") << _tfprof->_uuid << ".tfp";
+    std::ofstream ofs(fpath.str());
+    _tfprof->dump(ofs);
+  }
 }
 
 // Function: num_workers
 inline size_t Executor::num_workers() const {
   return _workers.size();
+}
+
+// Function: num_domains
+inline size_t Executor::num_domains() const {
+  return NUM_DOMAINS;
+}
+
+// Function: num_topologies
+inline size_t Executor::num_topologies() const {
+  return _num_topologies;
 }
 
 // Function: _per_thread
@@ -263,20 +427,27 @@ inline int Executor::this_worker_id() const {
 }
 
 // Procedure: _spawn
-inline void Executor::_spawn(unsigned N) {
+inline void Executor::_spawn(size_t N, Domain d) {
+  
+  auto id = _threads.size();
 
-  // Lock to synchronize all workers before creating _worker_maps
-  for(unsigned i=0; i<N; ++i) {
+  _id_offset[d] = id;
 
-    _workers[i].id = i;
+  for(size_t i=0; i<N; ++i, ++id) {
 
+    _workers[id].id = id;
+    _workers[id].vtm = id;
+    _workers[id].domain = d;
+    _workers[id].executor = this;
+    _workers[id].waiter = &_notifier[d]._waiters[i];
+    
     _threads.emplace_back([this] (Worker& w) -> void {
 
       PerThread& pt = _per_thread();  
       pt.worker = &w;
-    
+
       Node* t = nullptr;
-      
+
       // must use 1 as condition instead of !done
       while(1) {
         
@@ -289,290 +460,231 @@ inline void Executor::_spawn(unsigned N) {
         }
       }
       
-    }, std::ref(_workers[i]));     
-  }
-}
-
-// Function: _find_victim
-inline unsigned Executor::_find_victim(unsigned thief) {
-  
-  /*unsigned l = 0;
-  unsigned r = _workers.size() - 1;
-  unsigned vtm = std::uniform_int_distribution<unsigned>{l, r}(
-    _workers[thief].rdgen
-  );
-
-  // try to look for a task from other workers
-  for(unsigned i=0; i<_workers.size(); ++i){
-
-    if((thief == vtm && !_queue.empty()) ||
-       (thief != vtm && !_workers[vtm].queue.empty())) {
-      return vtm;
-    }
-
-    if(++vtm; vtm == _workers.size()) {
-      vtm = 0;
-    }
-  } */
-
-  // try to look for a task from other workers
-  for(unsigned vtm=0; vtm<_workers.size(); ++vtm){
-    if((thief == vtm && !_queue.empty()) ||
-       (thief != vtm && !_workers[vtm].queue.empty())) {
-      return vtm;
-    }
+    }, std::ref(_workers[id]));     
   }
 
-  return static_cast<unsigned>(_workers.size());
 }
 
 // Function: _explore_task
-inline void Executor::_explore_task(Worker& thief, Node*& t) {
+inline void Executor::_explore_task(Worker& w, Node*& t) {
   
-  //assert(_workers[thief].queue.empty());
+  //assert(_workers[w].wsq.empty());
   assert(!t);
 
-  const unsigned l = 0;
-  const unsigned r = static_cast<unsigned>(_workers.size()) - 1;
+  const auto d = w.domain;
 
-  const size_t F = (_workers.size() + 1) << 1;
-  const size_t Y = 100;
+  size_t num_steals = 0;
+  size_t num_yields = 0;
 
-  size_t f = 0;
-  size_t y = 0;
+  std::uniform_int_distribution<size_t> rdvtm(_VICTIM_BEG, _VICTIM_END);
 
-  // explore
-  while(!_done) {
-  
-    unsigned vtm = std::uniform_int_distribution<unsigned>{l, r}(thief.rdgen);
-      
-    t = (vtm == thief.id) ? _queue.steal() : _workers[vtm].queue.steal();
+  //while(!_done) {
+  //
+  //  size_t vtm = rdvtm(w.rdgen);
+  //    
+  //  t = (vtm == w.id) ? _wsq[d].steal() : _workers[vtm].wsq[d].steal();
+
+  //  if(t) {
+  //    break;
+  //  }
+
+  //  if(num_steal++ > _MAX_STEALS) {
+  //    std::this_thread::yield();
+  //    if(num_yields++ > _MAX_YIELDS) {
+  //      break;
+  //    }
+  //  }
+  //}
+
+  do {
+    t = (w.id == w.vtm) ? _wsq[d].steal() : _workers[w.vtm].wsq[d].steal();
 
     if(t) {
       break;
     }
-
-    if(f++ > F) {
+    
+    if(num_steals++ > _MAX_STEALS) {
       std::this_thread::yield();
-      if(y++ > Y) {
+      if(num_yields++ > _MAX_YIELDS) {
         break;
       }
     }
-
-    /*if(auto vtm = _find_victim(thief); vtm != _workers.size()) {
-      t = (vtm == thief) ? _queue.steal() : _workers[vtm].queue.steal();
-      // successful thief
-      if(t) {
-        break;
-      }
-    }
-    else {
-      if(f++ > F) {
-        if(std::this_thread::yield(); y++ > Y) {
-          break;
-        }
-      }
-    }*/
-  }
+    
+    w.vtm = rdvtm(w.rdgen);
+  } while(!_done);
 
 }
 
 // Procedure: _exploit_task
 inline void Executor::_exploit_task(Worker& w, Node*& t) {
   
-  assert(!w.cache);
-
   if(t) {
-    if(_num_actives.fetch_add(1) == 0 && _num_thieves == 0) {
-      _notifier.notify(false);
+
+    const auto d = w.domain;
+
+    if(_num_actives[d].fetch_add(1) == 0 && _num_thieves[d] == 0) {
+      _notifier[d].notify(false);
     }
 
-    auto tpg = t->_topology;
-    auto par = t->_parent;
-    w.num_executed = 1;
-
     do {
-      // Only joined subflow will enter block
-      // Flush the num_executed if encountering a different subflow
-      //if((*t)->_parent != par) {
-      //  if(par == nullptr) {
-      //    (*t)->_topology->_join_counter.fetch_sub(w.num_executed);
-      //  }
-      //  else {
-      //    auto ret = par->_join_counter.fetch_sub(w.num_executed);
-      //    if(ret == w.num_executed) {
-      //      _schedule(par, false);
-      //    }
-      //  }
-      //  w.num_executed = 1;
-      //  par = (*t)->_parent;
-      //}
 
       _invoke(w, t);
+      
+      if(t->_parent == nullptr) {
+        if(t->_topology->_join_counter.fetch_sub(1) == 1) {
+          _tear_down_topology(t->_topology);
+        }
+      }
+      else {  // joined subflow
+        t->_parent->_join_counter.fetch_sub(1);
+      }
 
-      if(w.cache) {
-        t = w.cache;
-        w.cache = nullptr;
-      }
-      else {
-        t = w.queue.pop();
-        if(t) {
-          // We only increment the counter when poping task from queue 
-          // (NOT including cache!)
-          if(t->_parent == par) {
-            w.num_executed ++;
-          }
-          // joined subflow
-          else {
-            if(par == nullptr) {
-              // still have tasks so the topology join counter can't be zero
-              t->_topology->_join_counter.fetch_sub(w.num_executed);
-            }
-            else {
-              auto ret = par->_join_counter.fetch_sub(w.num_executed);
-              if(ret == w.num_executed) {
-                //_schedule(par, false);
-                w.queue.push(par);
-              }
-            }
-            w.num_executed = 1;
-            par = t->_parent;
-          }
-        }
-        else {
-          // If no more local tasks!
-          if(par == nullptr) {
-            if(tpg->_join_counter.fetch_sub(w.num_executed) == w.num_executed) {
-              // TODO: Store tpg in local variable not in w
-              _tear_down_topology(&tpg);
-              if(tpg != nullptr) {
-                t = w.queue.pop();
-                if(t) {
-                  w.num_executed = 1;
-                }
-              }
-            }
-          }
-          else {
-            if(par->_join_counter.fetch_sub(w.num_executed) == w.num_executed) {
-              t = par;
-              w.num_executed = 1;
-              par = par->_parent;
-            }
-          }
-        }
-      }
+      t = w.wsq[d].pop();
+
     } while(t);
 
-    --_num_actives;
+    --_num_actives[d];
   }
 }
 
 // Function: _wait_for_task
 inline bool Executor::_wait_for_task(Worker& worker, Node*& t) {
 
+  const auto d = worker.domain;
+
   wait_for_task:
 
   assert(!t);
 
-  ++_num_thieves;
+  ++_num_thieves[d];
 
   explore_task:
 
   _explore_task(worker, t);
 
   if(t) {
-    auto N = _num_thieves.fetch_sub(1);
-    if(N == 1) {
-      _notifier.notify(false);
+    if(_num_thieves[d].fetch_sub(1) == 1) {
+      _notifier[d].notify(false);
     }
     return true;
   }
 
-  auto waiter = &_waiters[worker.id];
-
-  _notifier.prepare_wait(waiter);
+  _notifier[d].prepare_wait(worker.waiter);
   
-  //if(auto vtm = _find_victim(me); vtm != _workers.size()) {
-  if(!_queue.empty()) {
+  //if(auto vtm = _find_vtm(me); vtm != _workers.size()) {
+  if(!_wsq[d].empty()) {
 
-    _notifier.cancel_wait(waiter);
-    //t = (vtm == me) ? _queue.steal() : _workers[vtm].queue.steal();
+    _notifier[d].cancel_wait(worker.waiter);
+    //t = (vtm == me) ? _wsq.steal() : _workers[vtm].wsq.steal();
     
-    t = _queue.steal();
+    t = _wsq[d].steal();
     if(t) {
-      auto N = _num_thieves.fetch_sub(1);
-      if(N == 1) {
-        _notifier.notify(false);
+      if(_num_thieves[d].fetch_sub(1) == 1) {
+        _notifier[d].notify(false);
       }
       return true;
     }
     else {
+      worker.vtm = worker.id;
       goto explore_task;
     }
   }
 
   if(_done) {
-    _notifier.cancel_wait(waiter);
-    _notifier.notify(true);
-    --_num_thieves;
+    _notifier[d].cancel_wait(worker.waiter);
+    for(int i=0; i<NUM_DOMAINS; ++i) {
+      _notifier[i].notify(true);
+    }
+    --_num_thieves[d];
     return false;
   }
 
-  if(_num_thieves.fetch_sub(1) == 1 && _num_actives) {
-    _notifier.cancel_wait(waiter);
-    goto wait_for_task;
+  if(_num_thieves[d].fetch_sub(1) == 1) {
+    if(_num_actives[d]) {
+      _notifier[d].cancel_wait(worker.waiter);
+      goto wait_for_task;
+    }
+    // check all domain queue again
+    for(auto& w : _workers) {
+      if(!w.wsq[d].empty()) {
+        worker.vtm = w.id;
+        _notifier[d].cancel_wait(worker.waiter);
+        goto wait_for_task;
+      }
+    }
   }
     
   // Now I really need to relinguish my self to others
-  _notifier.commit_wait(waiter);
+  _notifier[d].commit_wait(worker.waiter);
 
   return true;
 }
 
 // Function: make_observer    
 template<typename Observer, typename... Args>
-Observer* Executor::make_observer(Args&&... args) {
+std::shared_ptr<Observer> Executor::make_observer(Args&&... args) {
+
+  static_assert(
+    std::is_base_of<ObserverInterface, Observer>::value,
+    "Observer must be derived from ObserverInterface"
+  );
+  
   // use a local variable to mimic the constructor 
-  auto tmp = std::make_unique<Observer>(std::forward<Args>(args)...);
-  tmp->set_up(_workers.size());
-  _observer = std::move(tmp);
-  return static_cast<Observer*>(_observer.get());
+  auto ptr = std::make_shared<Observer>(std::forward<Args>(args)...);
+  
+  ptr->set_up(_workers.size());
+
+  _observers.emplace(std::static_pointer_cast<ObserverInterface>(ptr));
+
+  return ptr;
 }
 
 // Procedure: remove_observer
-inline void Executor::remove_observer() {
-  _observer.reset();
+template <typename Observer>
+void Executor::remove_observer(std::shared_ptr<Observer> ptr) {
+  
+  static_assert(
+    std::is_base_of<ObserverInterface, Observer>::value,
+    "Observer must be derived from ObserverInterface"
+  );
+
+  _observers.erase(std::static_pointer_cast<ObserverInterface>(ptr));
+}
+
+// Function: num_observers
+inline size_t Executor::num_observers() const {
+  return _observers.size();
 }
 
 // Procedure: _schedule
 // The main procedure to schedule a give task node.
 // Each task node has two types of tasks - regular and subflow.
-inline void Executor::_schedule(Node* node, bool bypass) {
+inline void Executor::_schedule(Node* node) {
   
   //assert(_workers.size() != 0);
+
+  const auto d = node->domain();
   
   // caller is a worker to this pool
   auto worker = _per_thread().worker;
 
-  if(worker != nullptr) {
-    if(!bypass) {
-      worker->queue.push(node);
-    }
-    else {
-      assert(!worker->cache);
-      worker->cache = node;
+  if(worker != nullptr && worker->executor == this) {
+    worker->wsq[d].push(node);
+    if(worker->domain != d) {
+      if(_num_actives[d] == 0 && _num_thieves[d] == 0) {
+        _notifier[d].notify(false);
+      }
     }
     return;
   }
 
   // other threads
   {
-    std::lock_guard<std::mutex> lock(_queue_mutex);
-    _queue.push(node);
+    std::lock_guard<std::mutex> lock(_wsq_mutex);
+    _wsq[d].push(node);
   }
 
-  _notifier.notify(false);
+  _notifier[d].notify(false);
 }
 
 // Procedure: _schedule
@@ -593,28 +705,39 @@ inline void Executor::_schedule(PassiveVector<Node*>& nodes) {
   // worker thread
   auto worker = _per_thread().worker;
 
-  if(worker != nullptr) {
+  // task counts
+  size_t tcount[NUM_DOMAINS] = {0};
+
+  if(worker != nullptr && worker->executor == this) {
     for(size_t i=0; i<num_nodes; ++i) {
-      worker->queue.push(nodes[i]);
+      const auto d = nodes[i]->domain();
+      worker->wsq[d].push(nodes[i]);
+      tcount[d]++;
     }
+    
+    for(int d=0; d<NUM_DOMAINS; ++d) {
+      if(tcount[d] && d != worker->domain) {
+        if(_num_actives[d] == 0 && _num_thieves[d] == 0) {
+          _notifier[d].notify_n(tcount[d]);
+        }
+      }
+    }
+
     return;
   }
   
   // other threads
   {
-    std::lock_guard<std::mutex> lock(_queue_mutex);
+    std::lock_guard<std::mutex> lock(_wsq_mutex);
     for(size_t k=0; k<num_nodes; ++k) {
-      _queue.push(nodes[k]);
+      const auto d = nodes[k]->domain();
+      _wsq[d].push(nodes[k]);
+      tcount[d]++;
     }
   }
-
-  if(num_nodes >= _workers.size()) {
-    _notifier.notify(true);
-  }
-  else {
-    for(size_t k=0; k<num_nodes; ++k) {
-      _notifier.notify(false);
-    }
+  
+  for(int d=0; d<NUM_DOMAINS; ++d) {
+    _notifier[d].notify_n(tcount[d]);
   }
 }
 
@@ -628,6 +751,10 @@ inline void Executor::_invoke(Worker& worker, Node* node) {
   // access caused by topology clear.
   const auto num_successors = node->num_successors();
   
+  // acquire the parent flow counter
+  auto& c = (node->_parent) ? node->_parent->_join_counter : 
+                              node->_topology->_join_counter;
+  
   // switch is faster than nested if-else due to jump table
   switch(node->_handle.index()) {
     // static task
@@ -635,95 +762,22 @@ inline void Executor::_invoke(Worker& worker, Node* node) {
       _invoke_static_work(worker, node);
     } 
     break;
+
     // module task
     case Node::MODULE_WORK: {
-      bool first_time = !node->_has_state(Node::SPAWNED);
-      bool emptiness  = false;
-      _set_up_module_work(node, emptiness);
-      if(first_time && !emptiness) {
-        return;
-      }
+      _invoke_module_work(worker, node);
     }
     break;
+
     // dynamic task
     case Node::DYNAMIC_WORK: {
-
-      auto& subgraph = nstd::get<Node::DynamicWork>(node->_handle).subgraph;
-
-      // Clear the subgraph before the task execution
-      if(!node->_has_state(Node::SPAWNED)) {
-        subgraph.clear();
-      }
-     
-      Subflow fb(subgraph);
-
-      _invoke_dynamic_work(worker, node, fb);
-      
-      // Need to create a subflow if first time & subgraph is not empty 
-      if(!node->_has_state(Node::SPAWNED)) {
-        node->_set_state(Node::SPAWNED);
-        if(!subgraph.empty()) {
-          // For storing the source nodes
-          PassiveVector<Node*> src; 
-
-          for(auto n : subgraph._nodes) {
-
-            n->_topology = node->_topology;
-            n->_set_up_join_counter();
-            
-            if(!fb.detached()) {
-              n->_parent = node;
-            }
-
-            if(n->num_dependents() == 0) {
-              src.push_back(n);
-            }
-          }
-
-          const bool join = fb.joined();
-          if(!join) {
-            // Detach mode
-            node->_topology->_join_counter.fetch_add(src.size());         
-          }
-          else {
-            // Join mode
-            node->_join_counter.fetch_add(src.size());
-
-            // spawned node needs another second-round execution
-            if(node->_parent == nullptr) {
-              node->_topology->_join_counter.fetch_add(1);
-            }
-            else {
-              node->_parent->_join_counter.fetch_add(1);
-            }
-          }
-
-          _schedule(src);
-
-          if(join) {
-            return;
-          }
-        } // End of first time 
-      }
+      _invoke_dynamic_work(worker, node);
     }
     break;
+
     // condition task
     case Node::CONDITION_WORK: {
-
-      if(node->_has_state(Node::BRANCH)) {
-        node->_join_counter = node->num_strong_dependents();
-      }
-      else {
-        node->_join_counter = node->num_dependents();
-      }
-      
-      int id;
-      _invoke_condition_work(worker, node, id);
-
-      if(id >= 0 && static_cast<size_t>(id) < num_successors) {
-        node->_successors[id]->_join_counter.store(0);
-        _schedule(node->_successors[id], true);
-      }
+      _invoke_condition_work(worker, node);
       return ;
     }  // no need to add a break here due to the immediate return
 
@@ -739,9 +793,9 @@ inline void Executor::_invoke(Worker& worker, Node* node) {
     default:
     break;
   }
-  
 
-  // We MUST recover the dependency since subflow is a condition node can go back (cyclic)
+  // We MUST recover the dependency since subflow may have  
+  // a condition node to go back (cyclic).
   // This must be done before scheduling the successors, otherwise this might cause 
   // race condition on the _dependents
   if(node->_has_state(Node::BRANCH)) {
@@ -752,152 +806,232 @@ inline void Executor::_invoke(Worker& worker, Node* node) {
     node->_join_counter = node->num_dependents();
   }
 
-  node->_unset_state(Node::SPAWNED);
-
   // At this point, the node storage might be destructed.
-  Node* cache {nullptr};
-  size_t num_spawns {0};
-
-  auto& c = (node->_parent) ? node->_parent->_join_counter : 
-                              node->_topology->_join_counter;
-
   for(size_t i=0; i<num_successors; ++i) {
     if(--(node->_successors[i]->_join_counter) == 0) {
-      if(cache) {
-        if(num_spawns == 0) {
-          c.fetch_add(num_successors);
-        }
-        num_spawns++;
-        _schedule(cache, false);
-      }
-      cache = node->_successors[i];
+      c.fetch_add(1);
+      _schedule(node->_successors[i]);
     }
   }
+}
 
-  if(num_spawns) {
-    worker.num_executed += (node->_successors.size() - num_spawns);
+// Procedure: _observer_prologue
+inline void Executor::_observer_prologue(Worker& worker, Node* node) {
+  for(auto& observer : _observers) {
+    observer->on_entry(worker.id, TaskView(node));
   }
+}
 
-  if(cache) {
-    _schedule(cache, true);
+// Procedure: _observer_epilogue
+inline void Executor::_observer_epilogue(Worker& worker, Node* node) {
+  for(auto& observer : _observers) {
+    observer->on_exit(worker.id, TaskView(node));
   }
 }
 
 // Procedure: _invoke_static_work
 inline void Executor::_invoke_static_work(Worker& worker, Node* node) {
-  if(_observer) {
-    _observer->on_entry(worker.id, TaskView(node));
-    nstd::get<Node::StaticWork>(node->_handle).work();
-    _observer->on_exit(worker.id, TaskView(node));
-  }
-  else {
-    nstd::get<Node::StaticWork>(node->_handle).work();
-  }
+  _observer_prologue(worker, node);
+  nstd::get<Node::StaticWork>(node->_handle).work();
+  _observer_epilogue(worker, node);
 }
 
 // Procedure: _invoke_dynamic_work
-inline void Executor::_invoke_dynamic_work(Worker& worker, Node* node, Subflow& sf) {
-  if(_observer) {
-    _observer->on_entry(worker.id, TaskView(node));
-    nstd::get<Node::DynamicWork>(node->_handle).work(sf);
-    _observer->on_exit(worker.id, TaskView(node));
+inline void Executor::_invoke_dynamic_work(Worker& w, Node* node) {
+
+  _observer_prologue(w, node);
+
+  auto& handle = nstd::get<Node::DynamicWork>(node->_handle);
+
+  handle.subgraph.clear();
+
+  Subflow fb(*this, node, handle.subgraph); 
+
+  handle.work(fb);
+
+  if(!fb._joined) {
+    _invoke_dynamic_work_internal(w, node, handle.subgraph, fb._detach);
   }
-  else {
-    nstd::get<Node::DynamicWork>(node->_handle).work(sf);
+  
+  // TODO 
+  _observer_epilogue(w, node);
+}
+
+// Procedure: _invoke_dynamic_work_external
+inline void Executor::_invoke_dynamic_work_external(Graph& g, Node* p) {
+
+  auto worker = _per_thread().worker;
+
+  assert(worker && worker->executor == this);
+  
+  _invoke_dynamic_work_internal(*worker, p, g, false);
+}
+
+// Procedure: _invoke_dynamic_work_internal
+inline void Executor::_invoke_dynamic_work_internal(Worker& w, Node* p, Graph& g, bool d) {
+
+  if(!g.empty()) {
+
+    PassiveVector<Node*> src; 
+
+    for(auto n : g._nodes) {
+
+      n->_topology = p->_topology;
+      n->_set_up_join_counter();
+      n->_parent = d ? nullptr : p;
+      
+      if(n->num_dependents() == 0) {
+        src.push_back(n);
+      }
+    }
+    
+    // detach here
+    if(d) { 
+      p->_topology->_join_counter.fetch_add(src.size());
+      _schedule(src);
+    }
+    // join here
+    else {  
+      p->_join_counter.fetch_add(src.size());
+      _schedule(src);
+      Node* t = nullptr;
+      
+      //size_t num_steals = 0;
+      //std::uniform_int_distribution<size_t> rdvtm(_VICTIM_BEG, _VICTIM_END);
+
+      do {
+        t = w.wsq[w.domain].pop();
+    
+        if(t) {
+          _invoke(w, t);
+          t->_parent ? t->_parent->_join_counter.fetch_sub(1) :
+                       t->_topology->_join_counter.fetch_sub(1);
+        }
+        //else {
+        //  t = (w.id == w.vtm) ? _wsq[w.domain].steal() : 
+        //                           _workers[w.vtm].wsq[w.domain].steal();
+
+        //  if(t) {
+        //    _invoke(w, t);
+        //  }
+        //  else {
+        //    if(num_steals++ > _MAX_STEALS) {
+        //      std::this_thread::yield();
+        //    }
+        //    w.vtm = rdvtm(w.rdgen);
+        //  }
+        //}
+
+      } while(p->_join_counter != 0);
+    }
   }
 }
 
 // Procedure: _invoke_condition_work
-inline void Executor::_invoke_condition_work(Worker& worker, Node* node, int& id) {
-  if(_observer) {
-    _observer->on_entry(worker.id, TaskView(node));
-    id = nstd::get<Node::ConditionWork>(node->_handle).work();
-    _observer->on_exit(worker.id, TaskView(node));
+inline void Executor::_invoke_condition_work(Worker& worker, Node* node) {
+
+  _observer_prologue(worker, node);
+  
+  if(node->_has_state(Node::BRANCH)) {
+    node->_join_counter = node->num_strong_dependents();
   }
   else {
-    id = nstd::get<Node::ConditionWork>(node->_handle).work();
+    node->_join_counter = node->num_dependents();
   }
+  
+  auto id = nstd::get<Node::ConditionWork>(node->_handle).work();
+
+  if(id >= 0 && static_cast<size_t>(id) < node->num_successors()) {
+    auto s = node->_successors[id];
+    s->_join_counter.store(0);
+
+    node->_parent ? node->_parent->_join_counter.fetch_add(1) :
+                    node->_topology->_join_counter.fetch_add(1);
+    _schedule(s);
+
+
+    //if(s->domain() == worker.domain) {
+    //  _schedule(s, true);
+    //}
+    //else {
+    //  node->_parent ? node->_parent->_join_counter.fetch_add(1) :
+    //                  node->_topology->_join_counter.fetch_add(1);
+    //  _schedule(s, false);
+    //}
+  }
+
+  _observer_epilogue(worker, node);
 }
 
 #ifdef TF_ENABLE_CUDA
 // Procedure: _invoke_cudaflow_work
 inline void Executor::_invoke_cudaflow_work(Worker& worker, Node* node) {
-  if(_observer) {
-    _observer->on_entry(worker.id, TaskView(node));
-    _invoke_cudaflow_work_impl(worker, node);
-    _observer->on_exit(worker.id, TaskView(node));
-  }
-  else {
-    _invoke_cudaflow_work_impl(worker, node);
-  }
+  _observer_prologue(worker, node);  
+  _invoke_cudaflow_work_internal(worker, node);
+  _observer_epilogue(worker, node);
 }
 
-// Procedure: _invoke_cudaflow_work_impl
-inline void Executor::_invoke_cudaflow_work_impl(Worker&, Node* node) {
+// Procedure: _invoke_cudaflow_work_internal
+inline void Executor::_invoke_cudaflow_work_internal(Worker& w, Node* node) {
+  
+  assert(w.domain == node->domain());
 
   auto& h = nstd::get<Node::cudaFlowWork>(node->_handle);
 
   h.graph.clear();
 
-  cudaFlow cf(h.graph);
+  cudaFlow cf(h.graph, [repeat=1] () mutable { return repeat-- == 0; });
 
   h.work(cf); 
 
+  if(h.graph.empty()) {
+    return;
+  }
+  
+  // transforms cudaFlow to a native cudaGraph under the specified device
+  // and launches the graph through a given or an internal device stream
+  const int d = cf._device;
+
+  cudaScopedDevice ctx(d);
+  
+  auto s = cf._stream ? *(cf._stream) : 
+                        _cuda_devices[d].streams[w.id - _id_offset[w.domain]];
+
+  h.graph._make_native_graph();
+
   cudaGraphExec_t exec;
+
   TF_CHECK_CUDA(
-    cudaGraphInstantiate(&exec, h.graph._handle, nullptr, nullptr, 0),
-    "failed to create an exec cudaGraph"
+    cudaGraphInstantiate(&exec, h.graph._native_handle, nullptr, nullptr, 0),
+    "failed to create an executable cudaGraph"
   );
-  TF_CHECK_CUDA(cudaGraphLaunch(exec, 0), "failed to launch cudaGraph")
-  TF_CHECK_CUDA(cudaStreamSynchronize(0), "failed to sync cudaStream");
+  
+  while(!cf._predicate()) {
+    TF_CHECK_CUDA(
+      cudaGraphLaunch(exec, s), "failed to launch cudaGraph on stream ", s
+    );
+
+    TF_CHECK_CUDA(
+      cudaStreamSynchronize(s), "failed to synchronize stream ", s
+    );
+  }
+
   TF_CHECK_CUDA(
-    cudaGraphExecDestroy(exec), "failed to destroy an exec cudaGraph"
+    cudaGraphExecDestroy(exec), "failed to destroy an executable cudaGraph"
   );
 }
 #endif
 
-// Procedure: _set_up_module_work
-inline void Executor::_set_up_module_work(Node* node, bool& ept) {
+// Procedure: _invoke_module_work
+inline void Executor::_invoke_module_work(Worker& w, Node* node) {
 
-  // second time to enter this context
-  if(node->_has_state(Node::SPAWNED)) {
-    return;
-  }
+  _observer_prologue(w, node);
   
-  // first time to enter this context
-  node->_set_state(Node::SPAWNED);
-
   auto module = nstd::get<Node::ModuleWork>(node->_handle).module;
-
-  if(module->empty()) {
-    ept = true;
-    return;
-  }
-
-  PassiveVector<Node*> src;
-
-  for(auto n: module->_graph._nodes) {
-
-    n->_topology = node->_topology;
-    n->_parent = node;
-    n->_set_up_join_counter();
-
-    if(n->num_dependents() == 0) {
-      src.push_back(n);
-    }
-  }
-
-  node->_join_counter.fetch_add(src.size());
-    
-  if(node->_parent == nullptr) {
-    node->_topology->_join_counter.fetch_add(1);
-  }
-  else {
-    node->_parent->_join_counter.fetch_add(1);
-  }
   
-  // src can't be empty (banned outside)
-  _schedule(src);
+  _invoke_dynamic_work_internal(w, node, module->_graph, false);
+  
+  _observer_epilogue(w, node);  
 }
 
 // Function: run
@@ -930,7 +1064,7 @@ std::future<void> Executor::run_until(Taskflow& f, P&& pred) {
 
 // Function: _set_up_topology
 inline void Executor::_set_up_topology(Topology* tpg) {
-  
+
   tpg->_sources.clear();
   
   // scan each node in the graph and build up the links
@@ -950,26 +1084,26 @@ inline void Executor::_set_up_topology(Topology* tpg) {
 }
 
 // Function: _tear_down_topology
-inline void Executor::_tear_down_topology(Topology** tpg) {
+inline void Executor::_tear_down_topology(Topology* tpg) {
 
-  auto &f = (*tpg)->_taskflow;
+  auto &f = tpg->_taskflow;
 
   //assert(&tpg == &(f._topologies.front()));
 
   // case 1: we still need to run the topology again
-  if(! (*tpg)->_pred() ) {
+  if(! tpg->_pred() ) {
     //tpg->_recover_num_sinks();
 
-    assert((*tpg)->_join_counter == 0);
-    (*tpg)->_join_counter = (*tpg)->_sources.size();
+    assert(tpg->_join_counter == 0);
+    tpg->_join_counter = tpg->_sources.size();
 
-    _schedule((*tpg)->_sources); 
+    _schedule(tpg->_sources); 
   }
   // case 2: the final run of this topology
   else {
     
-    if((*tpg)->_call != nullptr) {
-      (*tpg)->_call();
+    if(tpg->_call != nullptr) {
+      tpg->_call();
     }
 
     f._mtx.lock();
@@ -977,20 +1111,20 @@ inline void Executor::_tear_down_topology(Topology** tpg) {
     // If there is another run (interleave between lock)
     if(f._topologies.size() > 1) {
 
-      assert((*tpg)->_join_counter == 0);
+      assert(tpg->_join_counter == 0);
 
       // Set the promise
-      (*tpg)->_promise.set_value();
+      tpg->_promise.set_value();
       f._topologies.pop_front();
       f._mtx.unlock();
       
       // decrement the topology but since this is not the last we don't notify
       _decrement_topology();
 
-      *tpg = &(f._topologies.front());
+      tpg = &(f._topologies.front());
 
-      _set_up_topology(*tpg);
-      _schedule((*tpg)->_sources);
+      _set_up_topology(tpg);
+      _schedule(tpg->_sources);
 
       //f._topologies.front()._bind(f._graph);
       //*tpg = &(f._topologies.front());
@@ -1006,7 +1140,7 @@ inline void Executor::_tear_down_topology(Topology** tpg) {
 
       // Need to back up the promise first here becuz taskflow might be 
       // destroy before taskflow leaves
-      auto p {std::move((*tpg)->_promise)};
+      auto p {std::move(tpg->_promise)};
 
       f._topologies.pop_front();
 
@@ -1016,9 +1150,6 @@ inline void Executor::_tear_down_topology(Topology** tpg) {
       p.set_value();
 
       _decrement_topology_and_notify();
-
-      // Reset topology so caller can stop execution
-      *tpg = nullptr;
     }
   }
 }
@@ -1037,41 +1168,6 @@ std::future<void> Executor::run_until(Taskflow& f, P&& pred, C&& c) {
     return promise.get_future();
   }
   
-
-  
-  //// Special case of zero workers requires:
-  ////  - iterative execution to avoid stack overflow
-  ////  - avoid execution of last_work
-  //if(_workers.size() == 0) {
-  //  
-  //  Topology tpg(f, std::forward<P>(pred), std::forward<C>(c));
-
-  //  // Clear last execution data & Build precedence between nodes and target
-  //  tpg._bind(f._graph);
-
-  //  std::stack<Node*> stack;
-
-  //  do {
-  //    _schedule_unsync(tpg._sources, stack);
-  //    while(!stack.empty()) {
-  //      auto node = stack.top();
-  //      stack.pop();
-  //      _invoke_unsync(node, stack);
-  //    }
-  //    tpg._recover_num_sinks();
-  //  } while(!std::invoke(tpg._pred));
-
-  //  if(tpg._call != nullptr) {
-  //    std::invoke(tpg._call);
-  //  }
-
-  //  tpg._promise.set_value();
-  //  
-  //  _decrement_topology_and_notify();
-  //  
-  //  return tpg._promise.get_future();
-  //}
-
   // Multi-threaded execution.
   bool run_now {false};
   Topology* tpg;
@@ -1129,6 +1225,29 @@ inline void Executor::wait_for_all() {
   _topology_cv.wait(lock, [&](){ return _num_topologies == 0; });
 }
 
+// ----------------------------------------------------------------------------
+// Cyclic Dependency
+// ----------------------------------------------------------------------------
+
+inline void Subflow::join() {
+
+  if(_joined) {
+    TF_THROW("subflow already joined");
+  }
+
+  _executor._invoke_dynamic_work_external(_graph, _parent);
+  _joined = true;
+}
+
 }  // end of namespace tf -----------------------------------------------------
+
+
+
+
+
+
+
+
+
 
 

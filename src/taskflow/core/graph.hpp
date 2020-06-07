@@ -5,16 +5,34 @@
 #include "../utility/object_pool.hpp"
 #include "../utility/traits.hpp"
 #include "../utility/passive_vector.hpp"
+#include "../utility/singleton.hpp"
+#include "../utility/uuid.hpp"
+#include "../utility/os.hpp"
 #include "../nstd/variant.hpp"
 
 #if defined(__CUDA__) || defined(__CUDACC__)
 #define TF_ENABLE_CUDA
-#include "../cuda/cuda_flow_builder.hpp"
+#include "../cuda/cuda_flow.hpp"
 #endif
 
 namespace tf {
 
+// ----------------------------------------------------------------------------
+// domain
+// ----------------------------------------------------------------------------
+
+enum Domain : int {
+  HOST = 0,
+#ifdef TF_ENABLE_CUDA
+  CUDA,
+#endif
+  NUM_DOMAINS
+};
+
+
+// ----------------------------------------------------------------------------
 // Class: Graph
+// ----------------------------------------------------------------------------
 class Graph {
 
   friend class Node;
@@ -63,9 +81,10 @@ class Node {
   friend class FlowBuilder;
   friend class Subflow;
 
+  TF_ENABLE_POOLABLE_ON_THIS;
+
   // state bit flag
-  constexpr static int SPAWNED = 0x1;
-  constexpr static int BRANCH  = 0x2;
+  constexpr static int BRANCH  = 0x1;
   
   // static work handle
   struct StaticWork {
@@ -127,22 +146,20 @@ class Node {
     ConditionWork,    // conditional tasking
     ModuleWork        // composable tasking
   >;
-
+  
+  public:
+  
   // variant index
-  constexpr static auto STATIC_WORK    = get_index_v<StaticWork, handle_t>;
-  constexpr static auto DYNAMIC_WORK   = get_index_v<DynamicWork, handle_t>;
-  constexpr static auto CONDITION_WORK = get_index_v<ConditionWork, handle_t>; 
-  constexpr static auto MODULE_WORK    = get_index_v<ModuleWork, handle_t>; 
+  constexpr static auto PLACEHOLDER_WORK = get_index_v<nstd::monostate, handle_t>;
+  constexpr static auto STATIC_WORK      = get_index_v<StaticWork, handle_t>;
+  constexpr static auto DYNAMIC_WORK     = get_index_v<DynamicWork, handle_t>;
+  constexpr static auto CONDITION_WORK   = get_index_v<ConditionWork, handle_t>; 
+  constexpr static auto MODULE_WORK      = get_index_v<ModuleWork, handle_t>; 
 
 #ifdef TF_ENABLE_CUDA
   constexpr static auto CUDAFLOW_WORK  = get_index_v<cudaFlowWork, handle_t>; 
 #endif
-  
-  public:
 
-    //Node() = default;
-
-    // Constructor 
     template <typename ...Args>
     Node(Args&&... args);
 
@@ -154,6 +171,8 @@ class Node {
     size_t num_weak_dependents() const;
     
     const std::string& name() const;
+
+    Domain domain() const;
 
   private:
 
@@ -170,7 +189,7 @@ class Node {
 
     int _state {0};
 
-    std::atomic<int> _join_counter {0};
+    std::atomic<size_t> _join_counter {0};
     
     void _precede(Node*);
     void _set_state(int);
@@ -260,8 +279,9 @@ inline Node::~Node() {
       
     auto& np = Graph::_node_pool();
     for(i=0; i<nodes.size(); ++i) {
-      nodes[i]->~Node();
-      np.deallocate(nodes[i]);
+      //nodes[i]->~Node();
+      //np.deallocate(nodes[i]);
+      np.recycle(nodes[i]);
     }
   }
 }
@@ -304,6 +324,35 @@ inline size_t Node::num_strong_dependents() const {
 inline const std::string& Node::name() const {
   return _name;
 }
+
+// Function: domain
+inline Domain Node::domain() const {
+
+  Domain domain;
+
+  switch(_handle.index()) {
+
+    case STATIC_WORK:
+    case DYNAMIC_WORK:
+    case CONDITION_WORK:
+    case MODULE_WORK:
+      domain = Domain::HOST;
+    break;
+
+#ifdef TF_ENABLE_CUDA
+    case CUDAFLOW_WORK:
+      domain = Domain::CUDA;
+    break;
+#endif
+
+    default:
+      domain = Domain::HOST;
+    break;
+  }
+
+  return domain;
+}
+
 //
 //// Function: dump
 //inline std::string Node::dump() const {
@@ -409,8 +458,9 @@ inline ObjectPool<Node>& Graph::_node_pool() {
 inline Graph::~Graph() {
   auto& np = _node_pool();
   for(auto node : _nodes) {
-    node->~Node();
-    np.deallocate(node);
+    //node->~Node();
+    //np.deallocate(node);
+    np.recycle(node);
   }
 }
 
@@ -429,8 +479,9 @@ inline Graph& Graph::operator = (Graph&& other) {
 inline void Graph::clear() {
   auto& np = _node_pool();
   for(auto node : _nodes) {
-    node->~Node();
-    np.deallocate(node);
+    //node->~Node();
+    //np.deallocate(node);
+    np.recycle(node);
   }
   _nodes.clear();
 }
@@ -451,19 +502,21 @@ inline bool Graph::empty() const {
 // create a node from a give argument; constructor is called if necessary
 template <typename ...ArgsT>
 Node* Graph::emplace_back(ArgsT&&... args) {
-  auto node = _node_pool().allocate();
-  new (node) Node(std::forward<ArgsT>(args)...);
-  _nodes.push_back(node);
-  return node;
+  //auto node = _node_pool().allocate();
+  //new (node) Node(std::forward<ArgsT>(args)...);
+  //_nodes.push_back(node);
+  _nodes.push_back(_node_pool().animate(std::forward<ArgsT>(args)...));
+  return _nodes.back();
 }
 
 // Function: emplace_back
 // create a node from a give argument; constructor is called if necessary
 inline Node* Graph::emplace_back() {
-  auto node = _node_pool().allocate();
-  new (node) Node();
-  _nodes.push_back(node);
-  return node;
+  //auto node = _node_pool().allocate();
+  //new (node) Node();
+  //_nodes.push_back(node);
+  _nodes.push_back(_node_pool().animate());
+  return _nodes.back();
 }
 
 

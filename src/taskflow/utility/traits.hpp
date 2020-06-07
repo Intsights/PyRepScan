@@ -3,10 +3,14 @@
 #include <type_traits>
 #include <iterator>
 #include <iostream>
+#include <fstream>
 #include <mutex>
-#include <deque>
+#include <stack>
+#include <queue>
 #include <vector>
 #include <algorithm>
+#include <memory>
+#include <atomic>
 #include <thread>
 #include <future>
 #include <functional>
@@ -16,9 +20,11 @@
 #include <list>
 #include <forward_list>
 #include <numeric>
+#include <random>
 #include <iomanip>
 #include <cassert>
 #include <cmath>
+#include <cstring>
 
 #include "../nstd/variant.hpp"
 
@@ -265,6 +271,36 @@ struct get_index<T, nstd::variant<Ts...>> : get_index_impl<0, T, Ts...>{};
 
 template <typename T, typename... Ts>
 constexpr auto get_index_v = get_index<T, Ts...>::value;
+
+// ----------------------------------------------------------------------------
+// is_pod
+//-----------------------------------------------------------------------------
+template <typename T>
+struct is_pod {
+  static const bool value = std::is_trivial<T>::value && 
+                            std::is_standard_layout<T>::value;
+};
+
+template <typename T>
+constexpr bool is_pod_v = is_pod<T>::value;
+
+// ----------------------------------------------------------------------------
+// bit_cast
+//-----------------------------------------------------------------------------
+template <class To, class From>
+typename std::enable_if<
+  (sizeof(To) == sizeof(From)) &&
+  std::is_trivially_copyable<From>::value &&
+  std::is_trivial<To>::value,
+  // this implementation requires that To is trivially default constructible
+  To
+>::type
+// constexpr support needs compiler magic
+bit_cast(const From &src) noexcept {
+  To dst;
+  std::memcpy(&dst, &src, sizeof(To));
+  return dst;
+}
 
 }  // end of namespace tf. ---------------------------------------------------
 

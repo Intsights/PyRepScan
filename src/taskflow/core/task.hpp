@@ -5,6 +5,49 @@
 namespace tf {
 
 // ----------------------------------------------------------------------------
+// Task Types
+// ----------------------------------------------------------------------------
+
+/**
+@enum TaskType
+
+@brief enumeration of all task types
+*/
+enum TaskType {
+  PLACEHOLDER_TASK = Node::PLACEHOLDER_WORK,
+#ifdef TF_ENABLE_CUDA
+  CUDAFLOW_TASK    = Node::CUDAFLOW_WORK,
+#endif
+  STATIC_TASK      = Node::STATIC_WORK,
+  DYNAMIC_TASK     = Node::DYNAMIC_WORK,
+  CONDITION_TASK   = Node::CONDITION_WORK,
+  MODULE_TASK      = Node::MODULE_WORK,
+  NUM_TASK_TYPES
+};
+
+/**
+@brief convert a task type to a human-readable string
+*/
+inline const char* task_type_to_string(TaskType type) {
+
+  const char* val;
+
+  switch(type) {
+    case PLACEHOLDER_TASK: val = "placeholder"; break;
+#ifdef TF_ENABLE_CUDA
+    case CUDAFLOW_TASK:    val = "cudaflow";    break;
+#endif
+    case STATIC_TASK:      val = "static";      break;
+    case DYNAMIC_TASK:     val = "subflow";     break;
+    case CONDITION_TASK:   val = "condition";   break;
+    case MODULE_TASK:      val = "module";      break;
+    default:               val = "undefined";   break;
+  }
+
+  return val;
+}
+
+// ----------------------------------------------------------------------------
 // Task Traits
 // ----------------------------------------------------------------------------
 
@@ -12,6 +55,8 @@ namespace tf {
 @struct is_static_task
 
 @brief determines if a callable is a static task
+
+A static task is a callable object constructible from std::function<void()>.
 */
 template <typename C>
 constexpr bool is_static_task_v = is_invocable_r_v<void, C> &&
@@ -21,6 +66,8 @@ constexpr bool is_static_task_v = is_invocable_r_v<void, C> &&
 @struct is_dynamic_task
 
 @brief determines if a callable is a dynamic task
+
+A dynamic task is a callable object constructible from std::function<void(Subflow&)>.
 */
 template <typename C>
 constexpr bool is_dynamic_task_v = is_invocable_r_v<void, C, Subflow&>;
@@ -29,9 +76,25 @@ constexpr bool is_dynamic_task_v = is_invocable_r_v<void, C, Subflow&>;
 @struct is_condition_task
 
 @brief determines if a callable is a condition task
+
+A condition task is a callable object constructible from std::function<int()>.
 */
 template <typename C>
 constexpr bool is_condition_task_v = is_invocable_r_v<int, C>;
+
+#ifdef TF_ENABLE_CUDA
+/**
+@struct is_cudaflow_task
+
+@brief determines if a callable is a cudaflow task
+
+A cudaFlow task is a callable object constructible from std::function<void(cudaFlow&)>.
+*/
+template <typename C>
+constexpr bool is_cudaflow_task_v = is_invocable_r_v<void, C, cudaFlow&>;
+#endif
+
+
 
 // ----------------------------------------------------------------------------
 // Task
@@ -42,10 +105,9 @@ constexpr bool is_condition_task_v = is_invocable_r_v<int, C>;
 
 @brief handle to a node in a task dependency graph
 
-A Task is a wrapper of a node in a dependency graph. 
+A Task is handle object of a node in a dependency graph. 
 It provides a set of methods for users to access and modify the attributes of 
-the task node,
-preventing direct access to the internal data storage.
+the associated graph node.
 
 */
 class Task {
@@ -125,7 +187,7 @@ class Task {
 
     @tparam C callable object type
 
-    @param callable a callable object acceptable to std::function<void()>
+    @param callable a callable object constructible from std::function<void()>
 
     @return @c *this
     */
@@ -137,7 +199,7 @@ class Task {
 
     @tparam C callable object type
 
-    @param callable a callable object acceptable to std::function<void(Subflow&)>
+    @param callable a callable object constructible from std::function<void(Subflow&)>
 
     @return @c *this
     */
@@ -149,12 +211,26 @@ class Task {
 
     @tparam C callable object type
 
-    @param callable a callable object acceptable to std::function<int()>
+    @param callable a callable object constructible from std::function<int()>
 
     @return @c *this
     */
     template <typename C>
     std::enable_if_t<is_condition_task_v<C>, Task>& work(C&& callable);
+
+#ifdef TF_ENABLE_CUDA    
+    /**
+    @brief assigns a cudaFlow task
+
+    @tparam C callable object type
+
+    @param callable a callable object constructible from std::function<void(cudaFlow&)>
+
+    @return @c *this
+    */
+    template <typename C>
+    std::enable_if_t<is_cudaflow_task_v<C>, Task>& work(C&& callable);
+#endif
 
     /**
     @brief creates a module task from a taskflow
@@ -220,7 +296,17 @@ class Task {
     */
     template <typename V>
     void for_each_dependent(V&& visitor) const;
+
+    /**
+    @brief obtains a hash value of the underlying node
+    */
+    size_t hash_value() const;
     
+    /**
+    @brief returns the task type
+    */
+    TaskType type() const;
+
   private:
     
     Task(Node*);
@@ -373,6 +459,11 @@ inline bool Task::has_work() const {
   return _node ? _node->_handle.index() != 0 : false;
 }
 
+// Function: task_type
+inline TaskType Task::type() const {
+  return static_cast<TaskType>(_node->_handle.index());
+}
+
 // Function: for_each_successor
 template <typename V>
 void Task::for_each_successor(V&& visitor) const {
@@ -389,13 +480,51 @@ void Task::for_each_dependent(V&& visitor) const {
   }
 }
 
+// Function: hash_value
+inline size_t Task::hash_value() const {
+  return std::hash<Node*>{}(_node);
+}
+
+// Function: work
+// assign a static work
+template <typename C>
+std::enable_if_t<is_static_task_v<C>, Task>& Task::work(C&& c) {
+  _node->_handle.emplace<Node::StaticWork>(std::forward<C>(c));
+  return *this;
+}
+
+// Function: work
+// assigns a dynamic work
+template <typename C>
+std::enable_if_t<is_dynamic_task_v<C>, Task>& Task::work(C&& c) {
+  _node->_handle.emplace<Node::DynamicWork>(std::forward<C>(c));
+  return *this;
+}
+
+// Function: work
+// assigns a condition work
+template <typename C>
+std::enable_if_t<is_condition_task_v<C>, Task>& Task::work(C&& c) {
+  _node->_handle.emplace<Node::ConditionWork>(std::forward<C>(c));
+  return *this;
+}
+
+#ifdef TF_ENABLE_CUDA
+// Function: work
+// assigns a cudaFlow work
+template <typename C>
+std::enable_if_t<is_cudaflow_task_v<C>, Task>& Task::work(C&& c) {
+  _node->_handle.emplace<Node::cudaFlowWork>(std::forward<C>(c));
+  return *this;
+}
+#endif
+
 // ----------------------------------------------------------------------------
 
 /**
 @class TaskView
 
-@brief an immutable accessor class to a task node, 
-       mainly used in the tf::ExecutorObserver interface.
+@brief class to access task information from the observer interface
 */
 class TaskView {
   
@@ -489,6 +618,11 @@ class TaskView {
     */
     template <typename V>
     void for_each_dependent(V&& visitor) const;
+
+    /**
+    @brief queries the task type
+    */
+    TaskType type() const;
     
   private:
     
@@ -562,6 +696,11 @@ inline bool TaskView::empty() const {
   return _node == nullptr;
 }
 
+// Function: type
+inline TaskType TaskView::type() const {
+  return static_cast<TaskType>(_node->_handle.index());
+}
+
 // Operator ==
 inline bool TaskView::operator == (const TaskView& rhs) const {
   return _node == rhs._node;
@@ -589,5 +728,23 @@ void TaskView::for_each_dependent(V&& visitor) const {
 }
 
 }  // end of namespace tf. ---------------------------------------------------
+
+namespace std {
+
+/**
+@class hash<tf::Task>
+
+@brief hash specialization for std::hash<tf::Task>
+
+*/
+template <>
+struct hash<tf::Task> {
+  auto operator() (const tf::Task& task) const noexcept {
+    return task.hash_value();
+  }
+};
+
+}  // end of namespace std ----------------------------------------------------
+
 
 
