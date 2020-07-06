@@ -118,10 +118,10 @@ class RulesManager {
 
         if (this->match_pattern_set.Match(content, &matched_regexes)) {
             std::vector<std::map<std::string, std::string>> matches;
-            re2::StringPiece input(content);
             std::string match;
 
             for (const auto & match_index : matched_regexes) {
+                re2::StringPiece input(content);
                 while (re2::RE2::FindAndConsume(&input, *this->match_patterns[match_index], &match)) {
                     if (this->match_blacklist_pattern_set[match_index]->Match(match, NULL)) {
                         continue;
