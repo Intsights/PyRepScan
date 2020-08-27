@@ -2,7 +2,7 @@ name: Build
 on: [push, pull_request]
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       max-parallel: 4
       matrix:
@@ -15,14 +15,13 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install Ubuntu packages
       run: >-
-        sudo apt install g++-9 libre2-dev libgit2-dev;
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 9;
+        sudo apt install libre2-dev libgit2-dev;
     - name: Test module
       run: >-
         python setup.py test
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
     steps:
     - uses: actions/checkout@v1
