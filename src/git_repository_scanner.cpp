@@ -304,24 +304,24 @@ PYBIND11_MODULE(pyrepscan, m) {
     pybind11::class_<GitRepositoryScanner>(m, "GitRepositoryScanner")
         .def(
             pybind11::init<>(),
-            ""
+            "GitRepositoryScanner is the main class that holds all the rules and scans the repository"
         )
         .def(
             "scan",
             &GitRepositoryScanner::scan,
-            "",
+            "Scan a repository for secrets",
             pybind11::arg("repository_path"),
             pybind11::arg("branch_glob_pattern")
         )
         .def(
             "compile_rules",
             &GitRepositoryScanner::compile_rules,
-            ""
+            "Compile all the added rules to make them available for a scan.\nCall this function after you finished adding all the rules"
         )
         .def(
             "add_rule",
             &GitRepositoryScanner::add_rule,
-            "",
+            "Adding a rule to the list of rules.\nAfter a compile_rules call, no more rules can be added.",
             pybind11::arg("name"),
             pybind11::arg("match_pattern"),
             pybind11::arg("match_whitelist_patterns"),
@@ -330,19 +330,19 @@ PYBIND11_MODULE(pyrepscan, m) {
         .def(
             "add_ignored_file_extension",
             &GitRepositoryScanner::add_ignored_file_extension,
-            "",
+            "Add a file extension to ignore during the scan",
             pybind11::arg("file_extension")
         )
         .def(
             "add_ignored_file_path",
             &GitRepositoryScanner::add_ignored_file_path,
-            "",
+            "Add a file path text to ignore during the scan.\nIf this text would exist in the examined file path, the file would be ignored.",
             pybind11::arg("file_path")
         )
         .def(
             "get_file_content",
             &GitRepositoryScanner::get_file_content,
-            "",
+            "Retrieving the content of a file.",
             pybind11::arg("repository_path"),
             pybind11::arg("file_oid")
         );
