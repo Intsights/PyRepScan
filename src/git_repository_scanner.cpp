@@ -77,7 +77,9 @@ class GitRepositoryScanner {
         git_tree * parent_git_tree = nullptr;
         git_diff * diff = nullptr;
 
-        git_commit_lookup(&current_commit, git_repo, &oid);
+        if (0 != git_commit_lookup(&current_commit, git_repo, &oid)) {
+            std::cout << "another bug" << std::endl;
+        }
 
         std::uint32_t current_commit_parent_count = git_commit_parentcount(current_commit);
         if (current_commit_parent_count > 1) {
@@ -134,11 +136,17 @@ class GitRepositoryScanner {
                 if (matches.has_value()) {
                     for (auto & match : matches.value()) {
                         char new_file_oid[41] = {0};
-                        git_oid_fmt(new_file_oid, &delta->new_file.id);
+                        if (0 != git_oid_fmt(new_file_oid, &delta->new_file.id)) {
+                            std::cout << "bug" << std::endl;
+                            continue;
+                        }
 
                         std::tm * commit_time_tm = std::gmtime(&commit_time);
                         std::ostringstream commit_time_ss;
                         commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
+
+                        std::cout << current_commit_id_string << std::endl;
+                        std::cout << delta->new_file.path << std::endl;
 
                         results.push_back(
                             {
