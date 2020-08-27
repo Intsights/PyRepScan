@@ -7,9 +7,9 @@
 #include <thread>
 #include <git2.h>
 
-#include "pybind11/pybind11.h"
-#include "pybind11/stl.h"
-#include "taskflow/taskflow.hpp"
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <taskflow/taskflow.hpp>
 
 #include "rules_manager.hpp"
 
