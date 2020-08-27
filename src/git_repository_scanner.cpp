@@ -5,8 +5,11 @@
 #include <iomanip>
 #include <ctime>
 #include <sstream>
+#include <mutex>
+#include <thread>
 #include <git2.h>
 
+#include "boost/asio.hpp"
 #include "rules_manager.hpp"
 
 
@@ -66,7 +69,7 @@ class GitRepositoryScanner {
         return oids;
     }
 
-    std::vector<std::map<std::string, std::string>> scan_oid(
+    void scan_oid(
         git_repository * git_repo,
         git_oid oid,
         std::vector<std::map<std::string, std::string>> & results
@@ -82,7 +85,7 @@ class GitRepositoryScanner {
         std::uint32_t current_commit_parent_count = git_commit_parentcount(current_commit);
         if (current_commit_parent_count > 1) {
             git_commit_free(current_commit);
-            return results;
+            return;
         }
 
         const git_oid * current_commit_id = git_commit_id(current_commit);
@@ -90,7 +93,7 @@ class GitRepositoryScanner {
         git_oid_fmt(current_commit_id_string, current_commit_id);
 
         const git_signature * current_commit_author = git_commit_author(current_commit);
-        std::string current_commit_message(git_commit_message(current_commit));
+        std::string current_commit_message = git_commit_message(current_commit);
 
         git_time_t commit_time = git_commit_time(current_commit);
 
@@ -136,10 +139,6 @@ class GitRepositoryScanner {
                         char new_file_oid[41] = {0};
                         git_oid_fmt(new_file_oid, &delta->new_file.id);
 
-                        std::tm * commit_time_tm = std::gmtime(&commit_time);
-                        std::ostringstream commit_time_ss;
-                        commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
-
                         std::string current_commit_author_name = "";
                         if (nullptr != current_commit_author->name) {
                             current_commit_author_name = current_commit_author->name;
@@ -148,6 +147,12 @@ class GitRepositoryScanner {
                         if (nullptr != current_commit_author->email) {
                             current_commit_author_email = current_commit_author->email;
                         }
+
+                        this->results_mutex.lock();
+
+                        std::tm * commit_time_tm = std::gmtime(&commit_time);
+                        std::ostringstream commit_time_ss;
+                        commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
 
                         results.push_back(
                             {
@@ -162,6 +167,8 @@ class GitRepositoryScanner {
                                 {"match", match["match"]},
                             }
                         );
+
+                        this->results_mutex.unlock();
                     }
                 }
                 git_blob_free(blob);
@@ -169,8 +176,6 @@ class GitRepositoryScanner {
         }
 
         git_diff_free(diff);
-
-        return results;
     }
 
     std::vector<std::map<std::string, std::string>> scan(
@@ -187,13 +192,21 @@ class GitRepositoryScanner {
             git_repo,
             branch_glob_pattern
         );
+
+        boost::asio::thread_pool pool;
         for (const auto & oid : oids) {
-            this->scan_oid(
-                git_repo,
-                oid,
-                results
+            boost::asio::post(
+                pool,
+                [this, &git_repo, &results, oid] () {
+                    this->scan_oid(
+                        git_repo,
+                        oid,
+                        results
+                    );
+                }
             );
         }
+        pool.join();
 
         return results;
     }
@@ -230,6 +243,7 @@ class GitRepositoryScanner {
 
     private:
     RulesManager rules_manager;
+    std::mutex results_mutex;
 };
 
 
