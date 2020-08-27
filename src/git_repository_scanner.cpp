@@ -90,7 +90,7 @@ class GitRepositoryScanner {
         git_oid_fmt(current_commit_id_string, current_commit_id);
 
         const git_signature * current_commit_author = git_commit_author(current_commit);
-        const char * current_commit_message = git_commit_message(current_commit);
+        std::string current_commit_message(git_commit_message(current_commit));
 
         git_time_t commit_time = git_commit_time(current_commit);
 
@@ -119,9 +119,6 @@ class GitRepositoryScanner {
             const git_diff_delta * delta = git_diff_get_delta(diff, i);
             git_blob * blob;
 
-            if (NULL == delta->new_file.path) {
-                std::cout << "delta-new-file-path" << std::endl;
-            }
             if (!this->rules_manager.should_scan_file_path(std::string(delta->new_file.path))) {
                 continue;
             }
@@ -132,9 +129,6 @@ class GitRepositoryScanner {
                     continue;
                 }
 
-                if (NULL == git_blob_rawcontent(blob)) {
-                    std::cout << "git_blob_rawcontent(blob)" << std::endl;
-                }
                 std::string content((const char *)git_blob_rawcontent(blob));
                 auto matches = this->rules_manager.scan_content(content);
                 if (matches.has_value()) {
@@ -146,29 +140,22 @@ class GitRepositoryScanner {
                         std::ostringstream commit_time_ss;
                         commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
 
-                        if (NULL == current_commit_id_string) {
-                            std::cout << "current_commit_id_string" << std::endl;
+                        std::string current_commit_author_name = "";
+                        if (nullptr != current_commit_author->name) {
+                            current_commit_author_name = current_commit_author->name;
                         }
-                        if (NULL == current_commit_message) {
-                            std::cout << "current_commit_message" << std::endl;
-                        }
-                        if (NULL == current_commit_author->name) {
-                            std::cout << "current_commit_author->name" << std::endl;
-                        }
-                        if (NULL == current_commit_author->email) {
-                            std::cout << "current_commit_author->email" << std::endl;
-                        }
-                        if (NULL == new_file_oid) {
-                            std::cout << "new_file_oid" << std::endl;
+                        std::string current_commit_author_email = "";
+                        if (nullptr != current_commit_author->email) {
+                            current_commit_author_email = current_commit_author->email;
                         }
 
                         results.push_back(
                             {
                                 {"commit_id", std::string(current_commit_id_string)},
-                                {"commit_message", std::string(current_commit_message)},
+                                {"commit_message", current_commit_message},
                                 {"commit_time", commit_time_ss.str()},
-                                {"author_name", std::string(current_commit_author->name)},
-                                {"author_email", std::string(current_commit_author->email)},
+                                {"author_name", current_commit_author_name},
+                                {"author_email", current_commit_author_email},
                                 {"file_path", std::string(delta->new_file.path)},
                                 {"file_oid", std::string(new_file_oid)},
                                 {"rule_name", match["rule_name"]},
