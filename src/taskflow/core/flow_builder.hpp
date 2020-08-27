@@ -23,7 +23,7 @@ class FlowBuilder {
     
     @param callable a callable object constructible from std::function<void()>
 
-    @return Task handle
+    @return a Task handle
     */
     template <typename C>
     std::enable_if_t<is_static_task_v<C>, Task> emplace(C&& callable);
@@ -35,7 +35,7 @@ class FlowBuilder {
     
     @param callable a callable object constructible from std::function<void(Subflow&)>
 
-    @return Task handle
+    @return a Task handle
     */
     template <typename C>
     std::enable_if_t<is_dynamic_task_v<C>, Task> emplace(C&& callable);
@@ -47,7 +47,7 @@ class FlowBuilder {
     
     @param callable a callable object constructible from std::function<int()>
 
-    @return Task handle
+    @return a Task handle
     */
     template <typename C>
     std::enable_if_t<is_condition_task_v<C>, Task> emplace(C&& callable);
@@ -60,7 +60,7 @@ class FlowBuilder {
     
     @param callable a callable object constructible from std::function<void(cudaFlow&)>
 
-    @return Task handle
+    @return a Task handle
     */
     template <typename C>
     std::enable_if_t<is_cudaflow_task_v<C>, Task> emplace(C&& callable);
@@ -85,191 +85,6 @@ class FlowBuilder {
     @return a Task handle
     */
     Task composed_of(Taskflow& taskflow);
-    
-    /**
-    @brief constructs a task dependency graph of range-based parallel_for
-    
-    The task dependency graph applies the callable object
-    @p callable to each object obtained by dereferencing
-    every iterator in the range [beg, end). The range
-    is split into chunks of size @p chunk, where each of them
-    is processed by one Task.
-
-    The callable needs to accept a single argument, the object in the range.
-
-    @tparam I input iterator type
-    @tparam C callable type
-
-    @param beg iterator to the beginning (inclusive)
-    @param end iterator to the end (exclusive)
-    @param callable a callable object to be applied to 
-    @param chunk size (default 1)
-
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <typename I, typename C>
-    std::pair<Task, Task> parallel_for(I beg, I end, C&& callable, size_t chunk=1);
-    
-    /**
-    @brief constructs a task dependency graph of integer index-based parallel_for
-    
-    The task dependency graph applies a callable object to every index 
-    in the range [beg, end) with a step size chunk by chunk.
-
-    @tparam I integer (arithmetic) index type
-    @tparam C callable type
-
-    @param beg index of the beginning (inclusive)
-    @param end index of the end (exclusive)
-    @param step step size 
-    @param callable a callable object to be applied to
-    @param chunk items per task
-
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <
-      typename I, 
-      typename C, 
-      std::enable_if_t<std::is_integral<std::decay_t<I>>::value, void>* = nullptr
-    >
-    std::pair<Task, Task> parallel_for(
-      I beg, I end, I step, C&& callable, size_t chunk = 1
-    );
-
-    /**
-    @brief constructs a task dependency graph of floating index-based parallel_for
-    
-    The task dependency graph applies a callable object to every index 
-    in the range [beg, end) with a step size chunk by chunk.
-
-    @tparam I floating (arithmetic) index type
-    @tparam C callable type
-
-    @param beg index of the beginning (inclusive)
-    @param end index of the end (exclusive)
-    @param step step size 
-    @param callable a callable object to be applied to
-    @param chunk items per task
-
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <
-      typename I, 
-      typename C, 
-      std::enable_if_t<std::is_floating_point<std::decay_t<I>>::value, void>* = nullptr
-    >
-    std::pair<Task, Task> parallel_for(
-      I beg, I end, I step, C&& callable, size_t chunk = 1
-    );
- 
-    /**
-    @brief construct a task dependency graph of parallel reduction
-    
-    The task dependency graph reduces items in the range [beg, end) to a single result.
-    
-    @tparam I input iterator type
-    @tparam T data type
-    @tparam B binary operator type
-
-    @param beg    iterator to the beginning (inclusive)
-    @param end    iterator to the end (exclusive)
-    @param result reference variable to store the final result
-    @param bop    binary operator that will be applied in unspecified order to the result
-                  of dereferencing the input iterator
-    
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <typename I, typename T, typename B>
-    std::pair<Task, Task> reduce(I beg, I end, T& result, B&& bop);
-    
-    /**
-    @brief constructs a task dependency graph of parallel reduction through @std_min
-    
-    The task dependency graph applies a parallel reduction
-    to find the minimum item in the range [beg, end) through @std_min reduction.
-
-    @tparam I input iterator type
-    @tparam T data type 
-
-    @param beg    iterator to the beginning (inclusive)
-    @param end    iterator to the end (exclusive)
-    @param result reference variable to store the final result
-
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <typename I, typename T>
-    std::pair<Task, Task> reduce_min(I beg, I end, T& result);
-    
-    /**
-    @brief constructs a task dependency graph of parallel reduction through @std_max
-    
-    The task dependency graph applies a parallel reduction
-    to find the maximum item in the range [beg, end) through @std_max reduction.
-
-    @tparam I input iterator type
-    @tparam T data type 
-
-    @param beg    iterator to the beginning (inclusive)
-    @param end    iterator to the end (exclusive)
-    @param result reference variable to store the final result
-
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <typename I, typename T>
-    std::pair<Task, Task> reduce_max(I beg, I end, T& result);
-    
-    /** 
-    @brief constructs a task dependency graph of parallel transformation and reduction
-    
-    The task dependency graph transforms each item in the range [beg, end) 
-    into a new data type and then reduce the results.
-
-    @tparam I input iterator type
-    @tparam T data type
-    @tparam B binary operator
-    @tparam U unary operator type
-
-    @param beg    iterator to the beginning (inclusive)
-    @param end    iterator to the end (exclusive)
-    @param result reference variable to store the final result
-    @param bop    binary function object that will be applied in unspecified order 
-                  to the results of @c uop; the return type must be @c T
-    @param uop    unary function object that transforms each element 
-                  in the input range; the return type must be acceptable as input to @c bop
-    
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <typename I, typename T, typename B, typename U>
-    std::pair<Task, Task> transform_reduce(I beg, I end, T& result, B&& bop, U&& uop);
-    
-    /**
-    @brief constructs a task dependency graph of parallel transformation and reduction
-    
-    The task dependency graph transforms each item in the range [beg, end) 
-    into a new data type and then apply two-layer reductions to derive the result.
-
-    @tparam I input iterator type
-    @tparam T data type
-    @tparam B binary operator type
-    @tparam P binary operator type
-    @tparam U unary operator type
-
-    @param beg    iterator to the beginning (inclusive)
-    @param end    iterator to the end (exclusive)
-    @param result reference variable to store the final result
-    @param bop1   binary function object that will be applied in the second-layer reduction
-                  to the results of @c bop2
-    @param bop2   binary function object that will be applied in the first-layer reduction
-                  to the results of @c uop and the dereferencing of input iterators
-    @param uop    unary function object that will be applied to transform an item to a new 
-                  data type that is acceptable as input to @c bop2
-    
-    @return a pair of Task handles to the beginning and the end of the graph
-    */
-    template <typename I, typename T, typename B, typename P, typename U>
-    std::pair<Task, Task> transform_reduce(
-      I beg, I end, T& result, B&& bop1, P&& bop2, U&& uop
-    );
     
     /**
     @brief creates an empty task
@@ -331,6 +146,470 @@ class FlowBuilder {
     @param A task A
     */
     void succeed(std::initializer_list<Task> others, Task A);
+    
+    // ------------------------------------------------------------------------
+    // parallel iterations
+    // ------------------------------------------------------------------------
+    
+    /**
+    @brief constructs a STL-styled parallel-for task
+
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam C callable type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param callable a callable object to apply to the dereferenced iterator 
+
+    @return a Task handle
+
+    The task spawns a subflow that applies the callable object to each object obtained by dereferencing every iterator in the range <tt>[first, last)</tt>. By default, we employ the guided partition algorithm with chunk size equal to one.
+    
+    This method is equivalent to the parallel execution of the following loop:
+    
+    @code{.cpp}
+    for(auto itr=first; itr!=last; itr++) {
+      callable(*itr);
+    }
+    @endcode
+    
+    Arguments templated to enable stateful passing using std::reference_wrapper. 
+    
+    The callable needs to take a single argument of the dereferenced type.
+    */
+    template <typename B, typename E, typename C>
+    Task for_each(B&& first, E&& last, C&& callable);
+    
+    /**
+    @brief constructs a STL-styled parallel-for task using the guided partition algorithm
+
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam C callable type
+    @tparam H chunk size type
+
+    @param beg iterator to the beginning (inclusive)
+    @param end iterator to the end (exclusive)
+    @param callable a callable object to apply to the dereferenced iterator 
+    @param chunk_size chunk size
+
+    @return a Task handle
+
+    The task spawns a subflow that applies the callable object to each object obtained by dereferencing every iterator in the range <tt>[beg, end)</tt>. The runtime partitions the range into chunks of the given chunk size, where each chunk is processed by a worker.
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    
+    The callable needs to take a single argument of the dereferenced type.
+    */
+    template <typename B, typename E, typename C, typename H = size_t>
+    Task for_each_guided(B&& beg, E&& end, C&& callable, H&& chunk_size = 1);
+    
+    /**
+    @brief constructs a STL-styled parallel-for task using the dynamic partition algorithm
+
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam C callable type
+    @tparam H chunk size type
+
+    @param beg iterator to the beginning (inclusive)
+    @param end iterator to the end (exclusive)
+    @param callable a callable object to apply to the dereferenced iterator 
+    @param chunk_size chunk size
+
+    @return a Task handle
+    
+    The task spawns a subflow that applies the callable object to each object obtained by dereferencing every iterator in the range <tt>[beg, end)</tt>. The runtime partitions the range into chunks of the given chunk size, where each chunk is processed by a worker.
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    
+    The callable needs to take a single argument of the dereferenced type.
+    */
+    template <typename B, typename E, typename C, typename H = size_t>
+    Task for_each_dynamic(B&& beg, E&& end, C&& callable, H&& chunk_size = 1);
+    
+    /**
+    @brief constructs a STL-styled parallel-for task using the dynamic partition algorithm
+
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam C callable type
+    @tparam H chunk size type
+
+    @param beg iterator to the beginning (inclusive)
+    @param end iterator to the end (exclusive)
+    @param callable a callable object to apply to the dereferenced iterator 
+    @param chunk_size chunk size
+
+    @return a Task handle
+    
+    The task spawns a subflow that applies the callable object to each object obtained by dereferencing every iterator in the range <tt>[beg, end)</tt>. The runtime partitions the range into chunks of the given chunk size, where each chunk is processed by a worker. When the given chunk size is zero, the runtime distributes the work evenly across workers.
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    
+    The callable needs to take a single argument of the dereferenced type.
+    */
+    template <typename B, typename E, typename C, typename H = size_t>
+    Task for_each_static(
+      B&& beg, E&& end, C&& callable, H&& chunk_size = 0
+    );
+    
+    /**
+    @brief constructs an index-based parallel-for task 
+
+    @tparam B beginning index type (must be integral)
+    @tparam E ending index type (must be integral)
+    @tparam S step type (must be integral)
+    @tparam C callable type
+
+    @param first index of the beginning (inclusive)
+    @param last index of the end (exclusive)
+    @param step step size 
+    @param callable a callable object to apply to each valid index
+
+    @return a Task handle
+    
+    The task spawns a subflow that applies the callable object to each index in the range <tt>[first, last)</tt> with the step size. By default, we employ the guided partition algorithm with chunk size equal to one.
+    
+    This method is equivalent to the parallel execution of the following loop:
+    
+    @code{.cpp}
+    // case 1: step size is positive
+    for(auto i=first; i<last; i+=step) {
+      callable(i);
+    }
+
+    // case 2: step size is negative
+    for(auto i=first, i>last; i+=step) {
+      callable(i);
+    }
+    @endcode
+
+    Arguments are templated to enable stateful passing using std::reference_wrapper.
+
+    The callable needs to take a single argument of the index type.
+    
+    */
+    template <typename B, typename E, typename S, typename C>
+    Task for_each_index(B&& first, E&& last, S&& step, C&& callable);
+    
+    /**
+    @brief constructs an index-based parallel-for task using the guided partition algorithm.
+    
+    @tparam B beginning index type (must be integral)
+    @tparam E ending index type (must be integral)
+    @tparam S step type (must be integral)
+    @tparam C callable type
+    @tparam H chunk size type
+
+    @param beg index of the beginning (inclusive)
+    @param end index of the end (exclusive)
+    @param step step size 
+    @param callable a callable object to apply to each valid index
+    @param chunk_size chunk size (default 1)
+
+    @return a Task handle
+    
+    The task spawns a subflow that applies the callable object to each index in the range <tt>[beg, end)</tt> with the step size. The runtime partitions the range into chunks of the given size, where each chunk is processed by a worker.
+
+    Arguments are templated to enable stateful passing using std::reference_wrapper.
+
+    The callable needs to take a single argument of the index type.
+    */
+    template <typename B, typename E, typename S, typename C, typename H = size_t>
+    Task for_each_index_guided(
+      B&& beg, E&& end, S&& step, C&& callable, H&& chunk_size = 1
+    );
+    
+    /**
+    @brief constructs an index-based parallel-for task using the dynamic partition algorithm.
+
+    @tparam B beginning index type (must be integral)
+    @tparam E ending index type (must be integral)
+    @tparam S step type (must be integral)
+    @tparam C callable type
+    @tparam H chunk size type
+
+    @param beg index of the beginning (inclusive)
+    @param end index of the end (exclusive)
+    @param step step size 
+    @param callable a callable object to apply to each valid index
+    @param chunk_size chunk size (default 1)
+
+    @return a Task handle
+    
+    The task spawns a subflow that applies the callable object to each index in the range <tt>[beg, end)</tt> with the step size. The runtime partitions the range into chunks of the given size, where each chunk is processed by a worker.
+
+    Arguments are templated to enable stateful passing using std::reference_wrapper.
+
+    The callable needs to take a single argument of the index type.
+    */
+    template <typename B, typename E, typename S, typename C, typename H = size_t>
+    Task for_each_index_dynamic(
+      B&& beg, E&& end, S&& step, C&& callable, H&& chunk_size = 1
+    );
+    
+    /**
+    @brief constructs an index-based parallel-for task using the static partition algorithm.
+    
+    @tparam B beginning index type (must be integral)
+    @tparam E ending index type (must be integral)
+    @tparam S step type (must be integral)
+    @tparam C callable type
+    @tparam H chunk size type
+
+    @param beg index of the beginning (inclusive)
+    @param end index of the end (exclusive)
+    @param step step size 
+    @param callable a callable object to apply to each valid index
+    @param chunk_size chunk size (default 0)
+
+    @return a Task handle
+    
+    The task spawns a subflow that applies the callable object to each index in the range <tt>[beg, end)</tt> with the step size. The runtime partitions the range into chunks of the given size, where each chunk is processed by a worker. When the given chunk size is zero, the runtime distributes the work evenly across workers.
+
+    Arguments are templated to enable stateful passing using std::reference_wrapper.
+
+    The callable needs to take a single argument of the index type.
+    */
+    template <typename B, typename E, typename S, typename C, typename H = size_t>
+    Task for_each_index_static(
+      B&& beg, E&& end, S&& step, C&& callable, H&& chunk_size = 0
+    );
+
+    // ------------------------------------------------------------------------
+    // reduction
+    // ------------------------------------------------------------------------
+
+    /**
+    @brief constructs a STL-styled parallel-reduce task
+  
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam O binary reducer type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied 
+
+    @return a Task handle
+    
+    The task spawns a subflow to perform parallel reduction over @c init and the elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of the given chunk size, where each chunk is processed by a worker. By default, we employ the guided partition algorithm.
+    
+    This method is equivalent to the parallel execution of the following loop:
+    
+    @code{.cpp}
+    for(auto itr=first; itr!=last; itr++) {
+      init = bop(init, *itr);
+    }
+    @endcode
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    */
+    template <typename B, typename E, typename T, typename O>
+    Task reduce(B&& first, E&& last, T& init, O&& bop);
+
+    /**
+    @brief constructs a STL-styled parallel-reduce task using the guided partition algorithm
+
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam O binary reducer type
+    @tparam H chunk size type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied 
+    @param chunk_size chunk size
+
+    The task spawns a subflow to perform parallel reduction over @c init and the elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of size @c chunk_size, where each chunk is processed by a worker. 
+
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+
+    @return a Task handle
+    */
+    template <typename B, typename E, typename T, typename O, typename H = size_t>
+    Task reduce_guided(
+      B&& first, E&& last, T& init, O&& bop, H&& chunk_size = 1
+    );
+    
+    /**
+    @brief constructs a STL-styled parallel-reduce task using the dynamic partition algorithm
+
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam O binary reducer type
+    @tparam H chunk size type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied 
+    @param chunk_size chunk size
+
+    The task spawns a subflow to perform parallel reduction over @c init and the elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of size @c chunk_size, where each chunk is processed by a worker. 
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+
+    @return a Task handle
+    */
+    template <typename B, typename E, typename T, typename O, typename H = size_t>
+    Task reduce_dynamic(
+      B&& first, E&& last, T& init, O&& bop, H&& chunk_size = 1
+    );
+    
+    /**
+    @brief constructs a STL-styled parallel-reduce task using the static partition algorithm
+
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam O binary reducer type
+    @tparam H chunk size type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied 
+    @param chunk_size chunk size
+
+    The task spawns a subflow to perform parallel reduction over @c init and the elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of size @c chunk_size, where each chunk is processed by a worker. 
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+
+    @return a Task handle
+    */
+    template <typename B, typename E, typename T, typename O, typename H = size_t>
+    Task reduce_static(
+      B&& first, E&& last, T& init, O&& bop, H&& chunk_size = 0
+    );
+    
+    // ------------------------------------------------------------------------
+    // transfrom and reduction
+    // ------------------------------------------------------------------------
+    
+    /**
+    @brief constructs a STL-styled parallel transform-reduce task
+  
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam BOP binary reducer type
+    @tparam UOP unary transformion type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied in unspecified order to the results of @c uop
+    @param uop unary operator that will be applied to transform each element in the range to the result type
+
+    @return a Task handle
+    
+    The task spawns a subflow to perform parallel reduction over @c init and the transformed elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of the given chunk size, where each chunk is processed by a worker. By default, we employ the guided partition algorithm.
+    
+    This method is equivalent to the parallel execution of the following loop:
+    
+    @code{.cpp}
+    for(auto itr=first; itr!=last; itr++) {
+      init = bop(init, uop(*itr));
+    }
+    @endcode
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    */
+    template <typename B, typename E, typename T, typename BOP, typename UOP>
+    Task transform_reduce(B&& first, E&& last, T& init, BOP&& bop, UOP&& uop);
+    
+    /**
+    @brief constructs a STL-styled parallel transform-reduce task using the guided partition algorithm
+  
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam BOP binary reducer type
+    @tparam UOP unary transformion type
+    @tparam H chunk size type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied in unspecified order to the results of @c uop
+    @param uop unary operator that will be applied to transform each element in the range to the result type
+    @param chunk_size chunk size
+
+    @return a Task handle
+    
+    The task spawns a subflow to perform parallel reduction over @c init and the transformed elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of size @c chunk_size, where each chunk is processed by a worker. 
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    */
+    template <typename B, typename E, typename T, typename BOP, typename UOP, typename H = size_t>
+    Task transform_reduce_guided(
+      B&& first, E&& last, T& init, BOP&& bop, UOP&& uop, H&& chunk_size = 1
+    );
+
+    /**
+    @brief constructs a STL-styled parallel transform-reduce task using the static partition algorithm
+  
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam BOP binary reducer type
+    @tparam UOP unary transformion type
+    @tparam H chunk size type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied in unspecified order to the results of @c uop
+    @param uop unary operator that will be applied to transform each element in the range to the result type
+    @param chunk_size chunk size
+
+    @return a Task handle
+    
+    The task spawns a subflow to perform parallel reduction over @c init and the transformed elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of size @c chunk_size, where each chunk is processed by a worker. 
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    */
+    template <typename B, typename E, typename T, typename BOP, typename UOP, typename H = size_t>
+    Task transform_reduce_static(
+      B&& first, E&& last, T& init, BOP&& bop, UOP&& uop, H&& chunk_size = 0
+    );
+
+    /**
+    @brief constructs a STL-styled parallel transform-reduce task using the dynamic partition algorithm
+  
+    @tparam B beginning iterator type
+    @tparam E ending iterator type
+    @tparam T result type 
+    @tparam BOP binary reducer type
+    @tparam UOP unary transformion type
+    @tparam H chunk size type
+
+    @param first iterator to the beginning (inclusive)
+    @param last iterator to the end (exclusive)
+    @param init initial value of the reduction and the storage for the reduced result
+    @param bop binary operator that will be applied in unspecified order to the results of @c uop
+    @param uop unary operator that will be applied to transform each element in the range to the result type
+    @param chunk_size chunk size
+
+    @return a Task handle
+    
+    The task spawns a subflow to perform parallel reduction over @c init and the transformed elements in the range <tt>[first, last)</tt>. The reduced result is store in @c init. The runtime partitions the range into chunks of size @c chunk_size, where each chunk is processed by a worker. 
+    
+    Arguments are templated to enable stateful passing using std::reference_wrapper. 
+    */
+    template <typename B, typename E, typename T, typename BOP, typename UOP, typename H = size_t>
+    Task transform_reduce_dynamic(
+      B&& first, E&& last, T& init, BOP&& bop, UOP&& uop, H&& chunk_size = 1
+    );
+    
     
   protected:
     
@@ -450,9 +729,9 @@ inline Task FlowBuilder::placeholder() {
   return Task(node);
 }
 
-// Function: parallel_for
+/*// Function: for_each
 template <typename I, typename C>
-std::pair<Task, Task> FlowBuilder::parallel_for(
+std::pair<Task, Task> FlowBuilder::for_each(
   I beg, I end, C&& c, size_t chunk
 ){
   
@@ -496,13 +775,13 @@ std::pair<Task, Task> FlowBuilder::parallel_for(
   return std::make_pair(S, T); 
 }
 
-// Function: parallel_for
+// Function: for_each
 template <
   typename I, 
   typename C, 
   std::enable_if_t<std::is_integral<std::decay_t<I>>::value, void>*
 >
-std::pair<Task, Task> FlowBuilder::parallel_for(I beg, I end, I s, C&& c, size_t chunk) {
+std::pair<Task, Task> FlowBuilder::for_each(I beg, I end, I s, C&& c, size_t chunk) {
   
   if((s == 0) || (beg < end && s <= 0) || (beg > end && s >=0) ) {
     TF_THROW("invalid range [", beg, ", ", end, ") with step size ", s);
@@ -554,11 +833,11 @@ std::pair<Task, Task> FlowBuilder::parallel_for(I beg, I end, I s, C&& c, size_t
   return std::make_pair(source, target);
 }
 
-// Function: parallel_for
+// Function: for_each
 template <typename I, typename C, 
   std::enable_if_t<std::is_floating_point<std::decay_t<I>>::value, void>*
 >
-std::pair<Task, Task> FlowBuilder::parallel_for(I beg, I end, I s, C&& c, size_t chunk) {
+std::pair<Task, Task> FlowBuilder::for_each(I beg, I end, I s, C&& c, size_t chunk) {
   
   if((s == 0) || (beg < end && s <= 0) || (beg > end && s >=0) ) {
     TF_THROW("invalid range [", beg, ", ", end, ") with step size ", s);
@@ -633,135 +912,7 @@ std::pair<Task, Task> FlowBuilder::parallel_for(I beg, I end, I s, C&& c, size_t
   }
     
   return std::make_pair(source, target);
-}
-
-// Function: reduce_min
-// Find the minimum element over a range of items.
-template <typename I, typename T>
-std::pair<Task, Task> FlowBuilder::reduce_min(I beg, I end, T& result) {
-  return reduce(beg, end, result, [] (const auto& l, const auto& r) {
-    return std::min(l, r);
-  });
-}
-
-// Function: reduce_max
-// Find the maximum element over a range of items.
-template <typename I, typename T>
-std::pair<Task, Task> FlowBuilder::reduce_max(I beg, I end, T& result) {
-  return reduce(beg, end, result, [] (const auto& l, const auto& r) {
-    return std::max(l, r);
-  });
-}
-
-// Function: transform_reduce    
-template <typename I, typename T, typename B, typename U>
-std::pair<Task, Task> FlowBuilder::transform_reduce(
-  I beg, I end, T& result, B&& bop, U&& uop
-) {
-
-  //using category = typename std::iterator_traits<I>::iterator_category;
-  
-  // Even partition
-  size_t d = std::distance(beg, end);
-  size_t w = std::max(unsigned{1}, std::thread::hardware_concurrency());
-  size_t g = std::max((d + w - 1) / w, size_t{2});
-
-  auto source = placeholder();
-  auto target = placeholder();
-
-  //std::vector<std::future<T>> futures;
-  auto g_results = std::make_unique<T[]>(w);
-  size_t id {0};
-
-  size_t remain = d;
-
-  while(beg != end) {
-
-    auto e = beg;
-    
-    size_t x = std::min(remain, g);
-    std::advance(e, x);
-    remain -= x;
-
-    // Create a task 
-    auto task = emplace([beg, e, bop, uop, res=&(g_results[id])] () mutable {
-      *res = uop(*beg);
-      for(++beg; beg != e; ++beg) {
-        *res = bop(std::move(*res), uop(*beg));          
-      }
-    });
-
-    source.precede(task);
-    task.precede(target);
-
-    // adjust the pointer
-    beg = e;
-    id ++;
-  }
-
-  // target synchronizer 
-  target.work([&result, bop, res=make_moc(std::move(g_results)), w=id] () {
-    for(auto i=0u; i<w; i++) {
-      result = bop(std::move(result), res.object[i]);
-    }
-  });
-
-  return std::make_pair(source, target); 
-}
-
-// Function: transform_reduce    
-template <typename I, typename T, typename B, typename P, typename U>
-std::pair<Task, Task> FlowBuilder::transform_reduce(
-  I beg, I end, T& result, B&& bop, P&& pop, U&& uop
-) {
-
-  //using category = typename std::iterator_traits<I>::iterator_category;
-  
-  // Even partition
-  size_t d = std::distance(beg, end);
-  size_t w = std::max(unsigned{1}, std::thread::hardware_concurrency());
-  size_t g = std::max((d + w - 1) / w, size_t{2});
-
-  auto source = placeholder();
-  auto target = placeholder();
-
-  auto g_results = std::make_unique<T[]>(w);
-
-  size_t id {0};
-  size_t remain = d;
-
-  while(beg != end) {
-
-    auto e = beg;
-    
-    size_t x = std::min(remain, g);
-    std::advance(e, x);
-    remain -= x;
-      
-    // Create a task 
-    auto task = emplace([beg, e, uop, pop,  res= &g_results[id]] () mutable {
-      *res = uop(*beg);
-      for(++beg; beg != e; ++beg) {
-        *res = pop(std::move(*res), *beg);
-      }
-    });
-    source.precede(task);
-    task.precede(target);
-
-    // adjust the pointer
-    beg = e;
-    id ++;
-  }
-
-  // target synchronizer 
-  target.work([&result, bop, g_results=make_moc(std::move(g_results)), w=id] () {
-    for(auto i=0u; i<w; i++) {
-      result = bop(std::move(result), std::move(g_results.object[i]));
-    }
-  });
-
-  return std::make_pair(source, target); 
-}
+} */
 
 // Procedure: _linearize
 template <typename L>
@@ -791,71 +942,6 @@ inline void FlowBuilder::linearize(std::initializer_list<Task> keys) {
   _linearize(keys);
 }
 
-// Proceduer: reduce
-template <typename I, typename T, typename B>
-std::pair<Task, Task> FlowBuilder::reduce(I beg, I end, T& result, B&& op) {
-  
-  //using category = typename std::iterator_traits<I>::iterator_category;
-  
-  size_t d = std::distance(beg, end);
-  size_t w = std::max(unsigned{1}, std::thread::hardware_concurrency());
-  size_t g = std::max((d + w - 1) / w, size_t{2});
-
-  auto source = placeholder();
-  auto target = placeholder();
-
-  //T* g_results = static_cast<T*>(malloc(sizeof(T)*w));
-  auto g_results = std::make_unique<T[]>(w);
-  //std::vector<std::future<T>> futures;
-  
-  size_t id {0};
-  size_t remain = d;
-
-  while(beg != end) {
-
-    auto e = beg;
-    
-    size_t x = std::min(remain, g);
-    std::advance(e, x);
-    remain -= x;
-    
-    // Create a task
-    //auto [task, future] = emplace([beg, e, op] () mutable {
-    auto task = emplace([beg, e, op, res = &g_results[id]] () mutable {
-      *res = *beg;
-      for(++beg; beg != e; ++beg) {
-        *res = op(std::move(*res), *beg);          
-      }
-      //auto init = *beg;
-      //for(++beg; beg != e; ++beg) {
-      //  init = op(std::move(init), *beg);          
-      //}
-      //return init;
-    });
-    source.precede(task);
-    task.precede(target);
-    //futures.push_back(std::move(future));
-
-    // adjust the pointer
-    beg = e;
-    id ++;
-  }
-  
-  // target synchronizer
-  //target.work([&result, futures=MoC{std::move(futures)}, op] () {
-  //  for(auto& fu : futures.object) {
-  //    result = op(std::move(result), fu.get());
-  //  }
-  //});
-  target.work([g_results=make_moc(std::move(g_results)), &result, op, w=id] () {
-    for(auto i=0u; i<w; i++) {
-      result = op(std::move(result), g_results.object[i]);
-    }
-  });
-
-  return std::make_pair(source, target); 
-}
-
 // ----------------------------------------------------------------------------
 
 /** 
@@ -870,6 +956,7 @@ join or detach a subflow by calling Subflow::join or Subflow::detach.
 class Subflow : public FlowBuilder {
 
   friend class Executor;
+  friend class FlowBuilder;
 
   public:
     
@@ -877,27 +964,22 @@ class Subflow : public FlowBuilder {
     @brief enables the subflow to join its parent task
 
     Performs an immediate action to join the subflow. Once the subflow is joined,
-    it is considered finished and you may not apply any other actions to it.
+    it is considered finished and you may not modify the subflow anymore.
     */
     void join();
 
     /**
     @brief enables the subflow to detach from its parent task
 
-    A joined subflow cannot be detached. The subflow will be detached upon leaving
-    its execution context.
+    Performs an immediate action to detach the subflow. Once the subflow is detached,
+    it is considered finished and you may not modify the subflow anymore.
     */
     void detach();
     
     /**
-    @brief queries if the subflow will be detached from its parent task
-    */
-    bool detached() const;
-
-    /**
     @brief queries if the subflow is joinable
 
-    When a subflow is joined, it becomes not joinable.
+    When a subflow is joined or detached, it becomes not joinable.
     */
     bool joinable() const;
 
@@ -908,8 +990,7 @@ class Subflow : public FlowBuilder {
     Executor& _executor;
     Node* _parent;
 
-    bool _joined {false};
-    bool _detach {false};
+    bool _joinable {true};
 };
 
 // Constructor
@@ -919,24 +1000,10 @@ inline Subflow::Subflow(Executor& executor, Node* parent, Graph& graph) :
   _parent     {parent} {
 }
 
-// Procedure: detach
-inline void Subflow::detach() {
-  if(_joined) {
-    TF_THROW("subflow already joined");
-  }
-  _detach = true;
-}
-
-// Function: detached
-inline bool Subflow::detached() const {
-  return _detach;
-}
-
 // Function: joined
 inline bool Subflow::joinable() const {
-  return !_joined;
+  return _joinable;
 }
-
 
 // ----------------------------------------------------------------------------
 // Legacy code

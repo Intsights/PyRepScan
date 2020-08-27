@@ -54,9 +54,9 @@ In order to compile this package you should have GCC & Python development packag
 ```sh
 sudo dnf install python3-devel gcc-c++ libgit2-devel re2-devel
 ```
-* Ubuntu 18.04
+* Ubuntu 20.04
 ```sh
-sudo apt install python3-dev g++-9 libgit2-dev libre2-dev
+sudo apt install python3-dev libgit2-dev libre2-dev
 ```
 
 ### Installation
