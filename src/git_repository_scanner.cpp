@@ -1,5 +1,3 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
 #include <vector>
 #include <map>
 #include <iomanip>
@@ -9,7 +7,10 @@
 #include <thread>
 #include <git2.h>
 
-#include "boost/asio.hpp"
+#include "pybind11/pybind11.h"
+#include "pybind11/stl.h"
+#include "taskflow/taskflow.hpp"
+
 #include "rules_manager.hpp"
 
 
@@ -193,20 +194,21 @@ class GitRepositoryScanner {
             branch_glob_pattern
         );
 
-        boost::asio::thread_pool pool;
-        for (const auto & oid : oids) {
-            boost::asio::post(
-                pool,
-                [this, &git_repo, &results, oid] () {
-                    this->scan_oid(
-                        git_repo,
-                        oid,
-                        results
-                    );
-                }
-            );
-        }
-        pool.join();
+        tf::Taskflow taskflow;
+        taskflow.for_each(
+            oids.begin(),
+            oids.end(),
+            [this, &git_repo, &results] (git_oid oid) {
+                this->scan_oid(
+                    git_repo,
+                    oid,
+                    results
+                );
+            }
+        );
+
+        tf::Executor executor;
+        executor.run(taskflow).wait();
 
         return results;
     }
