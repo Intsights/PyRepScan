@@ -77,9 +77,7 @@ class GitRepositoryScanner {
         git_tree * parent_git_tree = nullptr;
         git_diff * diff = nullptr;
 
-        if (0 != git_commit_lookup(&current_commit, git_repo, &oid)) {
-            std::cout << "bug" << std::endl;
-        }
+        git_commit_lookup(&current_commit, git_repo, &oid);
 
         std::uint32_t current_commit_parent_count = git_commit_parentcount(current_commit);
         if (current_commit_parent_count > 1) {
@@ -121,6 +119,9 @@ class GitRepositoryScanner {
             const git_diff_delta * delta = git_diff_get_delta(diff, i);
             git_blob * blob;
 
+            if (NULL == delta->new_file.path) {
+                std::cout << "delta-new-file-path" << std::endl;
+            }
             if (!this->rules_manager.should_scan_file_path(std::string(delta->new_file.path))) {
                 continue;
             }
@@ -131,7 +132,10 @@ class GitRepositoryScanner {
                     continue;
                 }
 
-                std::string content = (const char *)git_blob_rawcontent(blob);
+                if (NULL == git_blob_rawcontent(blob)) {
+                    std::cout << "git_blob_rawcontent(blob)" << std::endl;
+                }
+                std::string content((const char *)git_blob_rawcontent(blob));
                 auto matches = this->rules_manager.scan_content(content);
                 if (matches.has_value()) {
                     for (auto & match : matches.value()) {
@@ -142,8 +146,21 @@ class GitRepositoryScanner {
                         std::ostringstream commit_time_ss;
                         commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
 
-                        std::cout << current_commit_id_string << std::endl;
-                        std::cout << delta->new_file.path << std::endl;
+                        if (NULL == current_commit_id_string) {
+                            std::cout << "current_commit_id_string" << std::endl;
+                        }
+                        if (NULL == current_commit_message) {
+                            std::cout << "current_commit_message" << std::endl;
+                        }
+                        if (NULL == current_commit_author->name) {
+                            std::cout << "current_commit_author->name" << std::endl;
+                        }
+                        if (NULL == current_commit_author->email) {
+                            std::cout << "current_commit_author->email" << std::endl;
+                        }
+                        if (NULL == new_file_oid) {
+                            std::cout << "new_file_oid" << std::endl;
+                        }
 
                         results.push_back(
                             {
