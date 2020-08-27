@@ -78,7 +78,7 @@ class GitRepositoryScanner {
         git_diff * diff = nullptr;
 
         if (0 != git_commit_lookup(&current_commit, git_repo, &oid)) {
-            std::cout << "another bug" << std::endl;
+            std::cout << "bug" << std::endl;
         }
 
         std::uint32_t current_commit_parent_count = git_commit_parentcount(current_commit);
@@ -136,10 +136,7 @@ class GitRepositoryScanner {
                 if (matches.has_value()) {
                     for (auto & match : matches.value()) {
                         char new_file_oid[41] = {0};
-                        if (0 != git_oid_fmt(new_file_oid, &delta->new_file.id)) {
-                            std::cout << "bug" << std::endl;
-                            continue;
-                        }
+                        git_oid_fmt(new_file_oid, &delta->new_file.id);
 
                         std::tm * commit_time_tm = std::gmtime(&commit_time);
                         std::ostringstream commit_time_ss;
