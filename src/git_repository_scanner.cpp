@@ -33,10 +33,6 @@ class GitRepositoryScanner {
         this->rules_manager.add_rule(name, match_pattern, match_whitelist_patterns, match_blacklist_patterns);
     }
 
-    void compile_rules() {
-        this->rules_manager.compile_rules();
-    }
-
     void add_ignored_file_extension(
         std::string file_extension
     ) {
@@ -89,15 +85,6 @@ class GitRepositoryScanner {
             return;
         }
 
-        const git_oid * current_commit_id = git_commit_id(current_commit);
-        char current_commit_id_string[41] = {0};
-        git_oid_fmt(current_commit_id_string, current_commit_id);
-
-        const git_signature * current_commit_author = git_commit_author(current_commit);
-        std::string current_commit_message = git_commit_message(current_commit);
-
-        git_time_t commit_time = git_commit_time(current_commit);
-
         if (current_commit_parent_count == 1) {
             git_commit_parent(&parent_commit, current_commit, 0);
             git_commit_tree(&current_git_tree, current_commit);
@@ -105,7 +92,6 @@ class GitRepositoryScanner {
 
             git_diff_tree_to_tree(&diff, git_repo, parent_git_tree, current_git_tree, NULL);
 
-            git_commit_free(current_commit);
             git_commit_free(parent_commit);
             git_tree_free(current_git_tree);
             git_tree_free(parent_git_tree);
@@ -114,7 +100,6 @@ class GitRepositoryScanner {
 
             git_diff_tree_to_tree(&diff, git_repo, NULL, current_git_tree, NULL);
 
-            git_commit_free(current_commit);
             git_tree_free(current_git_tree);
         }
 
@@ -136,25 +121,33 @@ class GitRepositoryScanner {
                 std::string content((const char *)git_blob_rawcontent(blob));
                 auto matches = this->rules_manager.scan_content(content);
                 if (matches.has_value()) {
+                    this->results_mutex.lock();
+
+                    const git_oid * current_commit_id = git_commit_id(current_commit);
+                    char current_commit_id_string[41] = {0};
+                    git_oid_fmt(current_commit_id_string, current_commit_id);
+
+                    const git_signature * current_commit_author = git_commit_author(current_commit);
+                    std::string current_commit_message = git_commit_message(current_commit);
+
+                    char new_file_oid[41] = {0};
+                    git_oid_fmt(new_file_oid, &delta->new_file.id);
+
+                    std::string current_commit_author_name = "";
+                    if (nullptr != current_commit_author->name) {
+                        current_commit_author_name = current_commit_author->name;
+                    }
+                    std::string current_commit_author_email = "";
+                    if (nullptr != current_commit_author->email) {
+                        current_commit_author_email = current_commit_author->email;
+                    }
+
+                    git_time_t commit_time = git_commit_time(current_commit);
+                    std::tm * commit_time_tm = std::gmtime(&commit_time);
+                    std::ostringstream commit_time_ss;
+                    commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
+
                     for (auto & match : matches.value()) {
-                        char new_file_oid[41] = {0};
-                        git_oid_fmt(new_file_oid, &delta->new_file.id);
-
-                        std::string current_commit_author_name = "";
-                        if (nullptr != current_commit_author->name) {
-                            current_commit_author_name = current_commit_author->name;
-                        }
-                        std::string current_commit_author_email = "";
-                        if (nullptr != current_commit_author->email) {
-                            current_commit_author_email = current_commit_author->email;
-                        }
-
-                        this->results_mutex.lock();
-
-                        std::tm * commit_time_tm = std::gmtime(&commit_time);
-                        std::ostringstream commit_time_ss;
-                        commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
-
                         results.push_back(
                             {
                                 {"commit_id", std::string(current_commit_id_string)},
@@ -168,14 +161,15 @@ class GitRepositoryScanner {
                                 {"match", match["match"]},
                             }
                         );
-
-                        this->results_mutex.unlock();
                     }
+
+                    this->results_mutex.unlock();
                 }
                 git_blob_free(blob);
             }
         }
 
+        git_commit_free(current_commit);
         git_diff_free(diff);
     }
 
@@ -209,6 +203,8 @@ class GitRepositoryScanner {
 
         tf::Executor executor;
         executor.run(taskflow).wait();
+
+        git_repository_free(git_repo);
 
         return results;
     }
@@ -265,11 +261,6 @@ PYBIND11_MODULE(pyrepscan, m) {
             pybind11::arg("match_blacklist_patterns")
         )
         .def(
-            "compile_rules",
-            &RulesManager::compile_rules,
-            ""
-        )
-        .def(
             "add_ignored_file_extension",
             &RulesManager::add_ignored_file_extension,
             "",
@@ -314,14 +305,9 @@ PYBIND11_MODULE(pyrepscan, m) {
             pybind11::arg("branch_glob_pattern")
         )
         .def(
-            "compile_rules",
-            &GitRepositoryScanner::compile_rules,
-            "Compile all the added rules to make them available for a scan.\nCall this function after you finished adding all the rules"
-        )
-        .def(
             "add_rule",
             &GitRepositoryScanner::add_rule,
-            "Adding a rule to the list of rules.\nAfter a compile_rules call, no more rules can be added.",
+            "Adding a rule to the list of rules.",
             pybind11::arg("name"),
             pybind11::arg("match_pattern"),
             pybind11::arg("match_whitelist_patterns"),

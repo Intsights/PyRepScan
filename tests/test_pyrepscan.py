@@ -77,7 +77,6 @@ class RulesManagerTestCase(
             match_whitelist_patterns=[],
             match_blacklist_patterns=[],
         )
-        rules_manager.compile_rules()
 
         matches = rules_manager.scan_content(
             content='first line\nsecond line\nthird line',
@@ -125,7 +124,6 @@ class RulesManagerTestCase(
                 r'line',
             ],
         )
-        rules_manager.compile_rules()
 
         matches = rules_manager.scan_content(
             content='first line\nsecond line\nthird line',
@@ -164,7 +162,6 @@ class RulesManagerTestCase(
                 r'line',
             ],
         )
-        rules_manager.compile_rules()
 
         matches = rules_manager.scan_content(
             content='first line\nsecond line\nthird line',
@@ -359,7 +356,6 @@ class GitRepositoryScannerTestCase(
             match_whitelist_patterns=[],
             match_blacklist_patterns=[],
         )
-        grs.compile_rules()
 
         grs.add_ignored_file_extension('py')
         grs.add_ignored_file_path('test_')

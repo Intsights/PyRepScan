@@ -71,13 +71,8 @@ class RulesManager {
             this->match_whitelist_pattern_set.push_back(match_whitelists_pattern_set);
         }
 
-        this->match_pattern_set.Add(match_pattern, NULL);
         this->match_patterns.push_back(std::make_shared<re2::RE2>(match_pattern));
         this->rule_names.push_back(name);
-    }
-
-    void compile_rules() {
-        this->match_pattern_set.Compile();
     }
 
     void add_ignored_file_extension(
@@ -114,39 +109,37 @@ class RulesManager {
     inline std::optional<std::vector<std::map<std::string, std::string>>> scan_content(
         const std::string &content
     ) {
-        std::vector<std::int32_t> matched_regexes;
+        std::vector<std::map<std::string, std::string>> matches;
+        std::string match;
 
-        if (this->match_pattern_set.Match(content, &matched_regexes)) {
-            std::vector<std::map<std::string, std::string>> matches;
-            std::string match;
-
-            for (const auto & match_index : matched_regexes) {
-                re2::StringPiece input(content);
-                while (re2::RE2::FindAndConsume(&input, *this->match_patterns[match_index], &match)) {
-                    if (this->match_blacklist_pattern_set[match_index]->Match(match, NULL)) {
-                        continue;
-                    }
-
-                    if (
-                        this->match_whitelist_pattern_set[match_index] != nullptr &&
-                        !this->match_whitelist_pattern_set[match_index]->Match(match, NULL)
-                    ) {
-                        continue;
-                    }
-
-                    matches.push_back(
-                        {
-                            {"rule_name", this->rule_names[match_index]},
-                            {"match", match},
-                        }
-                    );
+        for (std::uint32_t pattern_index = 0; pattern_index < this->match_patterns.size(); ++pattern_index) {
+            re2::StringPiece input(content);
+            while (re2::RE2::FindAndConsume(&input, *this->match_patterns[pattern_index], &match)) {
+                if (this->match_blacklist_pattern_set[pattern_index]->Match(match, NULL)) {
+                    continue;
                 }
-            }
 
-            return matches;
+                if (
+                    this->match_whitelist_pattern_set[pattern_index] != nullptr &&
+                    !this->match_whitelist_pattern_set[pattern_index]->Match(match, NULL)
+                ) {
+                    continue;
+                }
+
+                matches.push_back(
+                    {
+                        {"rule_name", this->rule_names[pattern_index]},
+                        {"match", match},
+                    }
+                );
+            }
         }
 
-        return std::nullopt;
+        if (matches.size() == 0) {
+            return std::nullopt;
+        } else {
+            return matches;
+        }
     }
 
     inline std::vector<std::string> check_pattern(
@@ -178,8 +171,4 @@ class RulesManager {
     std::vector<std::shared_ptr<re2::RE2::Set>> match_whitelist_pattern_set;
     std::vector<std::shared_ptr<re2::RE2::Set>> match_blacklist_pattern_set;
     std::vector<std::shared_ptr<re2::RE2>> match_patterns;
-    re2::RE2::Set match_pattern_set = re2::RE2::Set(
-        re2::RE2::Quiet,
-        re2::RE2::UNANCHORED
-    );
 };

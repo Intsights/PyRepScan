@@ -80,8 +80,6 @@ grs.add_rule(
     match_whitelist_patterns=[],
     match_blacklist_patterns=[],
 )
-# Compiles the rules. Should be called only once after all the rules were added
-grs.compile_rules()
 
 # Add file extensions to ignore during the search
 grs.add_ignored_file_extension(
