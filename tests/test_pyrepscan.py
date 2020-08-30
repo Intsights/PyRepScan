@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 import git
+import datetime
 
 import pyrepscan
 
@@ -468,6 +469,7 @@ class GitRepositoryScannerTestCase(
             results = grs.scan(
                 repository_path=tmpdir,
                 branch_glob_pattern='*master',
+                from_timestamp=0,
             )
             for result in results:
                 result.pop('commit_id')
@@ -510,6 +512,7 @@ class GitRepositoryScannerTestCase(
             results = grs.scan(
                 repository_path=tmpdir,
                 branch_glob_pattern='*',
+                from_timestamp=0,
             )
             for result in results:
                 result.pop('commit_id')
@@ -579,4 +582,59 @@ class GitRepositoryScannerTestCase(
                     repository_path=tmpdir,
                     file_oid='6b584e8ece562ebffc15d38808cd6b98fc3d97ea',
                 ),
+            )
+
+            results = grs.scan(
+                repository_path=tmpdir,
+                branch_glob_pattern='*',
+                from_timestamp=int(
+                    datetime.datetime(
+                        year=2004,
+                        month=1,
+                        day=1,
+                        hour=0,
+                        minute=0,
+                        second=0,
+                        tzinfo=datetime.timezone.utc,
+                    ).timestamp()
+                ),
+            )
+            for result in results:
+                result.pop('commit_id')
+            self.assertCountEqual(
+                first=results,
+                second=[
+                    {
+                        'author_email': 'test@author.email',
+                        'author_name': 'Author Name',
+                        'commit_message': 'edited file in non_merged_branch',
+                        'commit_time': '2004-01-01T00:00:00',
+                        'file_oid': '057032a2108721ad1de6a9240fd1a8f45bc3f2ef',
+                        'file_path': 'file.txt',
+                        'match': 'content',
+                        'rule_name': 'First Rule'
+                    },
+                ],
+            )
+
+            results = grs.scan(
+                repository_path=tmpdir,
+                branch_glob_pattern='*',
+                from_timestamp=int(
+                    datetime.datetime(
+                        year=2004,
+                        month=1,
+                        day=1,
+                        hour=0,
+                        minute=0,
+                        second=1,
+                        tzinfo=datetime.timezone.utc,
+                    ).timestamp()
+                ),
+            )
+            for result in results:
+                result.pop('commit_id')
+            self.assertListEqual(
+                list1=results,
+                list2=[],
             )

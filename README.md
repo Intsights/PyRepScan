@@ -21,6 +21,7 @@
     - [CPU](#cpu)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
+- [Documentation](#documentation)
 - [Usage](#usage)
 - [License](#license)
 - [Contact](#contact)
@@ -66,6 +67,93 @@ pip3 install PyRepScan
 ```
 
 
+## Documentation
+
+```python
+class GitRepositoryScanner:
+    def __init__(
+      self,
+    ) -> None
+```
+This class holds all the added rules for fast reuse.
+
+
+```python
+def add_rule(
+    self,
+    name: str,
+    match_pattern: str,
+    match_whitelist_patterns: typing.List[str],
+    match_blacklist_patterns: typing.List[str],
+) -> None
+```
+The `add_rule` function adds a new rule to an internal list of rules that could be reused multiple times against different repositories. The same name can be used multiple times and would lead to results which can hold the same name.
+- `name` - The name of the rule so it can be identified.
+- `match_pattern` - The regex pattern (RE2 syntax) to match against the content of the commited files.
+- `match_whitelist_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter in results. Only one of the patterns should be matched to pass through the result. There is an OR relation between the patterns.
+- `match_blacklist_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter out results. Only one of the patterns should be matched to omit the result. There is an OR relation between the patterns.
+
+
+```python
+def add_ignored_file_extension(
+    self,
+    file_extension: str,
+) -> None
+```
+The `add_ignored_file_extension` function adds a new file extension to the filtering phase to reduce the amount of inspected files and to increase the performance of the scan.
+- `file_extension` - A file extension, without a leading dot, to filter out from the scan.
+
+
+```python
+def add_ignored_file_path(
+    self,
+    file_path: str,
+) -> None
+```
+The `add_ignored_file_path` function adds a new file pattern to the filtering phase to reduce the amount of inspected files and to increase the performance of the scan. Every file path that would include the `file_path` substring would be left out of the scanned files.
+- `file_path` - If the inspected file path would include this substring, it won't be scanned. This parameter is a free text.
+
+
+```python
+def scan(
+    self,
+    repository_path: str,
+    branch_glob_pattern: '*',
+    from_timestamp: int,
+) -> typing.List[typing.Dict[str, str]]
+```
+The `scan` function is the main function in the library. Calling this function would trigger a new scan that would return a list of matches. The scan function is a multithreaded operation, that would utilize all the available core in the system. The results would not include the file content but only the regex matching group. To retrieve the full file content one should take the `results['oid']` and to call `get_file_content` function.
+- `repository_path` - The git repository folder path.
+- `branch_glob_pattern` - A glob pattern to filter branches for the scan.
+- `from_timestamp` - A UTC timestamp (Int) that only commits that were created after this timestamp would be included in the scan.
+
+A sample result would look like this:
+```python
+{
+    'rule_name': 'First Rule',
+    'author_email': 'author@email.email',
+    'author_name': 'Author Name',
+    'commit_id': '1111111111111111111111111111111111111111',
+    'commit_message': 'The commit message',
+    'commit_time': '2020-01-01T00:00:00e',
+    'file_path': 'full/file/path',
+    'file_oid': '47d2739ba2c34690248c8f91b84bb54e8936899a',
+    'match': 'The matched group',
+}
+```
+
+
+```python
+def get_file_content(
+    repository_path: str,
+    file_oid: str,
+) -> bytes
+```
+The `get_file_content` function exists to retrieve the content of a file that was previously matched. The full file content is omitted from the results to reduce the results list size and to deliver better performance.
+- `repository_path` - The git repository folder path.
+- `file_oid` - A string representing the file oid. This parameter exists in the results dictionary returned by the `scan` function.
+
+
 ## Usage
 
 ```python
@@ -101,6 +189,7 @@ grs.add_ignored_file_path(
 results = grs.scan(
     repository_path='/repository/path',
     branch_glob_pattern='*',
+    from_timestamp=0,
 )
 
 # Results is a list of dicts. Each dict is in the following format:

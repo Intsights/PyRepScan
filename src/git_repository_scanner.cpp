@@ -47,7 +47,8 @@ class GitRepositoryScanner {
 
     std::vector<git_oid> get_oids(
         git_repository * git_repo,
-        std::string branch_glob_pattern
+        std::string branch_glob_pattern,
+        std::int64_t from_timestamp
     ) {
         git_revwalk * repo_revwalk = nullptr;
         git_oid oid;
@@ -57,8 +58,14 @@ class GitRepositoryScanner {
         git_revwalk_sorting(repo_revwalk, GIT_SORT_TIME);
         git_revwalk_push_glob(repo_revwalk, branch_glob_pattern.c_str());
 
+        git_commit * current_commit = nullptr;
         while (git_revwalk_next(&oid, repo_revwalk) == 0) {
-            oids.push_back(oid);
+            git_commit_lookup(&current_commit, git_repo, &oid);
+            git_time_t commit_time = git_commit_time(current_commit);
+            if (commit_time >= from_timestamp) {
+                oids.push_back(oid);
+            }
+            git_commit_free(current_commit);
         }
 
         git_revwalk_free(repo_revwalk);
@@ -175,7 +182,8 @@ class GitRepositoryScanner {
 
     std::vector<std::map<std::string, std::string>> scan(
         std::string repository_path,
-        std::string branch_glob_pattern
+        std::string branch_glob_pattern,
+        std::int64_t from_timestamp
     ) {
         git_repository * git_repo = nullptr;
         if (0 != git_repository_open(&git_repo, repository_path.c_str())) {
@@ -185,7 +193,8 @@ class GitRepositoryScanner {
         std::vector<std::map<std::string, std::string>> results;
         std::vector<git_oid> oids = this->get_oids(
             git_repo,
-            branch_glob_pattern
+            branch_glob_pattern,
+            from_timestamp
         );
 
         tf::Taskflow taskflow;
@@ -302,7 +311,8 @@ PYBIND11_MODULE(pyrepscan, m) {
             &GitRepositoryScanner::scan,
             "Scan a repository for secrets",
             pybind11::arg("repository_path"),
-            pybind11::arg("branch_glob_pattern")
+            pybind11::arg("branch_glob_pattern"),
+            pybind11::arg("from_timestamp")
         )
         .def(
             "add_rule",
