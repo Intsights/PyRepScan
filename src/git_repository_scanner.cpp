@@ -10,6 +10,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <taskflow/taskflow.hpp>
+#include <utf8/utf8.h>
 
 #include "rules_manager.hpp"
 
@@ -135,18 +136,27 @@ class GitRepositoryScanner {
                     git_oid_fmt(current_commit_id_string, current_commit_id);
 
                     const git_signature * current_commit_author = git_commit_author(current_commit);
-                    std::string current_commit_message = git_commit_message(current_commit);
+                    std::string current_commit_message = utf8::replace_invalid(
+                        git_commit_message(current_commit),
+                        '?'
+                    );
 
                     char new_file_oid[41] = {0};
                     git_oid_fmt(new_file_oid, &delta->new_file.id);
 
                     std::string current_commit_author_name = "";
                     if (nullptr != current_commit_author->name) {
-                        current_commit_author_name = current_commit_author->name;
+                        current_commit_author_name = utf8::replace_invalid(
+                            current_commit_author->name,
+                            '?'
+                        );
                     }
                     std::string current_commit_author_email = "";
                     if (nullptr != current_commit_author->email) {
-                        current_commit_author_email = current_commit_author->email;
+                        current_commit_author_email = utf8::replace_invalid(
+                            current_commit_author->email,
+                            '?'
+                        );
                     }
 
                     git_time_t commit_time = git_commit_time(current_commit);
