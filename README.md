@@ -79,19 +79,31 @@ This class holds all the added rules for fast reuse.
 
 
 ```python
-def add_rule(
+def add_content_rule(
     self,
     name: str,
-    match_pattern: str,
-    match_whitelist_patterns: typing.List[str],
-    match_blacklist_patterns: typing.List[str],
+    regex_pattern: str,
+    whitelist_regex_patterns: typing.List[str],
+    blacklist_regex_patterns: typing.List[str],
 ) -> None
 ```
-The `add_rule` function adds a new rule to an internal list of rules that could be reused multiple times against different repositories. The same name can be used multiple times and would lead to results which can hold the same name.
+The `add_content_rule` function adds a new rule to an internal list of rules that could be reused multiple times against different repositories. The same name can be used multiple times and would lead to results which can hold the same name. Content rule means that the regex pattern would be tested against the content of the files.
 - `name` - The name of the rule so it can be identified.
-- `match_pattern` - The regex pattern (RE2 syntax) to match against the content of the commited files.
-- `match_whitelist_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter in results. Only one of the patterns should be matched to pass through the result. There is an OR relation between the patterns.
-- `match_blacklist_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter out results. Only one of the patterns should be matched to omit the result. There is an OR relation between the patterns.
+- `regex_pattern` - The regex pattern (RE2 syntax) to match against the content of the commited files.
+- `whitelist_regex_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter in results. Only one of the patterns should be matched to pass through the result. There is an OR relation between the patterns.
+- `blacklist_regex_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter out results. Only one of the patterns should be matched to omit the result. There is an OR relation between the patterns.
+
+
+```python
+def add_file_name_rule(
+    self,
+    name: str,
+    regex_pattern: str,
+) -> None
+```
+The `add_file_name_rule` function adds a new rule to an internal list of rules that could be reused multiple times against different repositories. The same name can be used multiple times and would lead to results which can hold the same name. File name rule means that the regex pattern would be tested against the file names.
+- `name` - The name of the rule so it can be identified.
+- `regex_pattern` - The regex pattern (RE2 syntax) to match against the file names of the commited files.
 
 
 ```python
@@ -119,7 +131,7 @@ def scan(
     self,
     repository_path: str,
     branch_glob_pattern: '*',
-    from_timestamp: int,
+    from_timestamp: int = 0,
 ) -> typing.List[typing.Dict[str, str]]
 ```
 The `scan` function is the main function in the library. Calling this function would trigger a new scan that would return a list of matches. The scan function is a multithreaded operation, that would utilize all the available core in the system. The results would not include the file content but only the regex matching group. To retrieve the full file content one should take the `results['oid']` and to call `get_file_content` function.
@@ -162,11 +174,19 @@ import pyrepscan
 grs = pyrepscan.GitRepositoryScanner()
 
 # Adds a specific rule, can be called multiple times or none
-grs.add_rule(
+grs.add_content_rule(
     name='First Rule',
-    match_pattern=r'''(-----BEGIN PRIVATE KEY-----)''',
-    match_whitelist_patterns=[],
-    match_blacklist_patterns=[],
+    regex_pattern=r'(-----BEGIN PRIVATE KEY-----)',
+    whitelist_regex_patterns=[],
+    blacklist_regex_patterns=[],
+)
+grs.add_file_name_rule(
+    name='Second Rule',
+    regex_pattern=r'.+\.pem',
+)
+grs.add_file_name_rule(
+    name='Third Rule',
+    regex_pattern=r'(prod|dev|stage).+key',
 )
 
 # Add file extensions to ignore during the search
@@ -189,7 +209,6 @@ grs.add_ignored_file_path(
 results = grs.scan(
     repository_path='/repository/path',
     branch_glob_pattern='*',
-    from_timestamp=0,
 )
 
 # Results is a list of dicts. Each dict is in the following format:

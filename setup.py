@@ -5,7 +5,7 @@ import glob
 
 setuptools.setup(
     name='PyRepScan',
-    version='0.5.2',
+    version='0.6.0',
     author='Gal Ben David',
     author_email='gal@intsights.com',
     url='https://github.com/intsights/PyRepScan',
@@ -25,8 +25,12 @@ setuptools.setup(
     keywords='git repository leaks scanner detector libgit2 re2 c++',
     python_requires='>=3.6',
     zip_safe=False,
+    setup_requires=[
+        'pytest-runner',
+    ],
     tests_require=[
         'gitpython',
+        'pytest',
     ],
     package_data={},
     include_package_data=True,

@@ -25,13 +25,32 @@ class GitRepositoryScanner {
         git_libgit2_shutdown();
     }
 
-    void add_rule(
+    void add_content_rule(
         std::string name,
-        std::string match_pattern,
-        std::vector<std::string> match_whitelist_patterns,
-        std::vector<std::string> match_blacklist_patterns
+        std::string regex_pattern,
+        std::vector<std::string> whitelist_regex_patterns,
+        std::vector<std::string> blacklist_regex_patterns
     ) {
-        this->rules_manager.add_rule(name, match_pattern, match_whitelist_patterns, match_blacklist_patterns);
+        ContentRule rule(
+            name,
+            regex_pattern,
+            whitelist_regex_patterns,
+            blacklist_regex_patterns
+        );
+
+        this->rules_manager.add_content_rule(rule);
+    }
+
+    void add_file_name_rule(
+        std::string name,
+        std::string regex_pattern
+    ) {
+        FileNameRule rule(
+            name,
+            regex_pattern
+        );
+
+        this->rules_manager.add_file_name_rule(rule);
     }
 
     void add_ignored_file_extension(
@@ -80,28 +99,23 @@ class GitRepositoryScanner {
         return oids;
     }
 
-    void scan_oid(
+    git_diff * get_commit_diff_with_parent(
         git_repository * git_repo,
-        git_oid oid,
-        std::vector<std::map<std::string, std::string>> & results
+        git_commit * commit
     ) {
+        git_diff * diff = nullptr;
         git_commit * parent_commit = nullptr;
-        git_commit * current_commit = nullptr;
         git_tree * current_git_tree = nullptr;
         git_tree * parent_git_tree = nullptr;
-        git_diff * diff = nullptr;
 
-        git_commit_lookup(&current_commit, git_repo, &oid);
-
-        std::uint32_t current_commit_parent_count = git_commit_parentcount(current_commit);
-        if (current_commit_parent_count > 1) {
-            git_commit_free(current_commit);
-            return;
+        std::uint32_t commit_parent_count = git_commit_parentcount(commit);
+        if (commit_parent_count > 1) {
+            return nullptr;
         }
 
-        if (current_commit_parent_count == 1) {
-            git_commit_parent(&parent_commit, current_commit, 0);
-            git_commit_tree(&current_git_tree, current_commit);
+        if (commit_parent_count == 1) {
+            git_commit_parent(&parent_commit, commit, 0);
+            git_commit_tree(&current_git_tree, commit);
             git_commit_tree(&parent_git_tree, parent_commit);
 
             git_diff_tree_to_tree(&diff, git_repo, parent_git_tree, current_git_tree, NULL);
@@ -109,12 +123,29 @@ class GitRepositoryScanner {
             git_commit_free(parent_commit);
             git_tree_free(current_git_tree);
             git_tree_free(parent_git_tree);
-        } else if (current_commit_parent_count == 0) {
-            git_commit_tree(&current_git_tree, current_commit);
+        } else if (commit_parent_count == 0) {
+            git_commit_tree(&current_git_tree, commit);
 
             git_diff_tree_to_tree(&diff, git_repo, NULL, current_git_tree, NULL);
 
             git_tree_free(current_git_tree);
+        }
+
+        return diff;
+    }
+
+    inline void scan_oid(
+        git_repository * git_repo,
+        git_oid oid,
+        std::vector<std::map<std::string, std::string>> & results
+    ) {
+        git_commit * commit = nullptr;
+        git_commit_lookup(&commit, git_repo, &oid);
+        git_diff * diff = this->get_commit_diff_with_parent(git_repo, commit);
+        if (diff == nullptr) {
+            git_commit_free(commit);
+
+            return;
         }
 
         std::size_t num_of_deltas = git_diff_num_deltas(diff);
@@ -122,8 +153,18 @@ class GitRepositoryScanner {
             const git_diff_delta * delta = git_diff_get_delta(diff, i);
             git_blob * blob;
 
-            if (!this->rules_manager.should_scan_file_path(std::string(delta->new_file.path))) {
+            if (!this->rules_manager.should_scan_file_path(delta->new_file.path)) {
                 continue;
+            }
+
+            std::vector<std::map<std::string, std::string>> matches;
+            auto file_name_scan_matches = this->rules_manager.scan_file_name(delta->new_file.path);
+            if (file_name_scan_matches.has_value()){
+                matches.insert(
+                    matches.end(),
+                    file_name_scan_matches.value().begin(),
+                    file_name_scan_matches.value().end()
+                );
             }
 
             if(0 == git_blob_lookup(&blob, git_repo, &delta->new_file.id)) {
@@ -133,67 +174,74 @@ class GitRepositoryScanner {
                 }
 
                 std::string content((const char *)git_blob_rawcontent(blob));
-                auto matches = this->rules_manager.scan_content(content);
-                if (matches.has_value()) {
-                    this->results_mutex.lock();
-
-                    const git_oid * current_commit_id = git_commit_id(current_commit);
-                    char current_commit_id_string[41] = {0};
-                    git_oid_fmt(current_commit_id_string, current_commit_id);
-
-                    const git_signature * current_commit_author = git_commit_author(current_commit);
-                    std::string current_commit_message = utf8::replace_invalid(
-                        git_commit_message(current_commit),
-                        '?'
+                auto content_scan_matches = this->rules_manager.scan_content(content);
+                if (content_scan_matches.has_value()){
+                    matches.insert(
+                        matches.end(),
+                        content_scan_matches.value().begin(),
+                        content_scan_matches.value().end()
                     );
-
-                    char new_file_oid[41] = {0};
-                    git_oid_fmt(new_file_oid, &delta->new_file.id);
-
-                    std::string current_commit_author_name = "";
-                    if (nullptr != current_commit_author->name) {
-                        current_commit_author_name = utf8::replace_invalid(
-                            current_commit_author->name,
-                            '?'
-                        );
-                    }
-                    std::string current_commit_author_email = "";
-                    if (nullptr != current_commit_author->email) {
-                        current_commit_author_email = utf8::replace_invalid(
-                            current_commit_author->email,
-                            '?'
-                        );
-                    }
-
-                    git_time_t commit_time = git_commit_time(current_commit);
-                    std::tm * commit_time_tm = std::gmtime(&commit_time);
-                    std::ostringstream commit_time_ss;
-                    commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
-
-                    for (auto & match : matches.value()) {
-                        results.push_back(
-                            {
-                                {"commit_id", std::string(current_commit_id_string)},
-                                {"commit_message", current_commit_message},
-                                {"commit_time", commit_time_ss.str()},
-                                {"author_name", current_commit_author_name},
-                                {"author_email", current_commit_author_email},
-                                {"file_path", std::string(delta->new_file.path)},
-                                {"file_oid", std::string(new_file_oid)},
-                                {"rule_name", match["rule_name"]},
-                                {"match", match["match"]},
-                            }
-                        );
-                    }
-
-                    this->results_mutex.unlock();
                 }
+
                 git_blob_free(blob);
             }
+
+            this->results_mutex.lock();
+
+            const git_oid * commit_id = git_commit_id(commit);
+            char commit_id_string[41] = {0};
+            git_oid_fmt(commit_id_string, commit_id);
+
+            const git_signature * commit_author = git_commit_author(commit);
+            std::string commit_message = utf8::replace_invalid(
+                git_commit_message(commit),
+                '?'
+            );
+
+            char new_file_oid[41] = {0};
+            git_oid_fmt(new_file_oid, &delta->new_file.id);
+
+            std::string commit_author_name = "";
+            if (nullptr != commit_author->name) {
+                commit_author_name = utf8::replace_invalid(
+                    commit_author->name,
+                    '?'
+                );
+            }
+            std::string commit_author_email = "";
+            if (nullptr != commit_author->email) {
+                commit_author_email = utf8::replace_invalid(
+                    commit_author->email,
+                    '?'
+                );
+            }
+
+            git_time_t commit_time = git_commit_time(commit);
+            std::tm * commit_time_tm = std::gmtime(&commit_time);
+            std::ostringstream commit_time_ss;
+            commit_time_ss << std::put_time(commit_time_tm, "%FT%T");
+
+            for (auto & match : matches) {
+                results.push_back(
+                    {
+                        {"commit_id", std::string(commit_id_string)},
+                        {"commit_message", commit_message},
+                        {"commit_time", commit_time_ss.str()},
+                        {"author_name", commit_author_name},
+                        {"author_email", commit_author_email},
+                        {"file_path", std::string(delta->new_file.path)},
+                        {"file_oid", std::string(new_file_oid)},
+                        {"rule_name", match["rule_name"]},
+                        {"match", match["match"]},
+                    }
+                );
+            }
+
+            this->results_mutex.unlock();
         }
 
-        git_commit_free(current_commit);
         git_diff_free(diff);
+        git_commit_free(commit);
     }
 
     std::vector<std::map<std::string, std::string>> scan(
@@ -271,19 +319,40 @@ class GitRepositoryScanner {
 
 
 PYBIND11_MODULE(pyrepscan, m) {
+    pybind11::class_<ContentRule>(m, "ContentRule")
+        .def(
+            pybind11::init<std::string, std::string, std::vector<std::string>, std::vector<std::string>>(),
+            "",
+            pybind11::arg("name"),
+            pybind11::arg("regex_pattern"),
+            pybind11::arg("whitelist_regex_patterns"),
+            pybind11::arg("blacklist_regex_patterns")
+        );
+
+    pybind11::class_<FileNameRule>(m, "FileNameRule")
+        .def(
+            pybind11::init<std::string, std::string>(),
+            "",
+            pybind11::arg("name"),
+            pybind11::arg("regex_pattern")
+        );
+
     pybind11::class_<RulesManager>(m, "RulesManager")
         .def(
             pybind11::init<>(),
             ""
         )
         .def(
-            "add_rule",
-            &RulesManager::add_rule,
+            "add_content_rule",
+            &RulesManager::add_content_rule,
             "",
-            pybind11::arg("name"),
-            pybind11::arg("match_pattern"),
-            pybind11::arg("match_whitelist_patterns"),
-            pybind11::arg("match_blacklist_patterns")
+            pybind11::arg("rule")
+        )
+        .def(
+            "add_file_name_rule",
+            &RulesManager::add_file_name_rule,
+            "",
+            pybind11::arg("rule")
         )
         .def(
             "add_ignored_file_extension",
@@ -310,6 +379,12 @@ PYBIND11_MODULE(pyrepscan, m) {
             pybind11::arg("content")
         )
         .def(
+            "scan_file_name",
+            &RulesManager::scan_file_name,
+            "",
+            pybind11::arg("file_name")
+        )
+        .def(
             "check_pattern",
             &RulesManager::check_pattern,
             "",
@@ -331,13 +406,20 @@ PYBIND11_MODULE(pyrepscan, m) {
             pybind11::arg("from_timestamp") = 0
         )
         .def(
-            "add_rule",
-            &GitRepositoryScanner::add_rule,
+            "add_content_rule",
+            &GitRepositoryScanner::add_content_rule,
             "Adding a rule to the list of rules.",
             pybind11::arg("name"),
-            pybind11::arg("match_pattern"),
-            pybind11::arg("match_whitelist_patterns"),
-            pybind11::arg("match_blacklist_patterns")
+            pybind11::arg("regex_pattern"),
+            pybind11::arg("whitelist_regex_patterns"),
+            pybind11::arg("blacklist_regex_patterns")
+        )
+        .def(
+            "add_file_name_rule",
+            &GitRepositoryScanner::add_file_name_rule,
+            "Adding a rule to the list of rules.",
+            pybind11::arg("name"),
+            pybind11::arg("regex_pattern")
         )
         .def(
             "add_ignored_file_extension",
