@@ -379,6 +379,12 @@ PYBIND11_MODULE(pyrepscan, m) {
             pybind11::arg("content")
         )
         .def(
+            "scan_file_name",
+            &RulesManager::scan_file_name,
+            "",
+            pybind11::arg("file_name")
+        )
+        .def(
             "check_pattern",
             &RulesManager::check_pattern,
             "",

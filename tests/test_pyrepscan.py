@@ -67,7 +67,7 @@ class RulesManagerTestCase(
             expr=should_scan,
         )
 
-    def test_add_rule_one(
+    def test_add_content_rule_one(
         self,
     ):
         rules_manager = pyrepscan.RulesManager()
@@ -114,7 +114,7 @@ class RulesManagerTestCase(
             ],
         )
 
-    def test_add_rule_two(
+    def test_add_content_rule_two(
         self,
     ):
         rules_manager = pyrepscan.RulesManager()
@@ -151,7 +151,7 @@ class RulesManagerTestCase(
             ],
         )
 
-    def test_add_rule_three(
+    def test_add_content_rule_three(
         self,
     ):
         rules_manager = pyrepscan.RulesManager()
@@ -187,7 +187,7 @@ class RulesManagerTestCase(
             ],
         )
 
-    def test_add_rule_four(
+    def test_add_content_rule_four(
         self,
     ):
         rules_manager = pyrepscan.RulesManager()
@@ -306,6 +306,36 @@ class RulesManagerTestCase(
             second=str(context.exception),
         )
 
+    def test_add_file_name_rule_one(
+        self,
+    ):
+        rules_manager = pyrepscan.RulesManager()
+
+        rules_manager.add_file_name_rule(
+            rule=pyrepscan.FileNameRule(
+                name='rule_one',
+                regex_pattern=r'(prod|dev|stage).+key',
+            ),
+        )
+
+        self.assertIsNone(
+            obj=rules_manager.scan_file_name(
+                file_name='workdir/prod/some_file',
+            ),
+        )
+
+        self.assertEqual(
+            first=rules_manager.scan_file_name(
+                file_name='workdir/prod/some_file.key',
+            ),
+            second=[
+                {
+                    'match': 'workdir/prod/some_file.key',
+                    'rule_name': 'rule_one',
+                },
+            ],
+        )
+
     def test_check_pattern(
         self,
     ):
@@ -381,6 +411,8 @@ class GitRepositoryScannerTestCase(
             tmpfile.write('content')
         with open(f'{self.tmpdir.name}/file.py', 'w') as tmpfile:
             tmpfile.write('content')
+        with open(f'{self.tmpdir.name}/prod_env.key', 'w') as tmpfile:
+            tmpfile.write('')
         with open(f'{self.tmpdir.name}/file.other', 'w') as tmpfile:
             tmpfile.write('nothing special')
         with open(f'{self.tmpdir.name}/test_file.cpp', 'w') as tmpfile:
@@ -389,6 +421,7 @@ class GitRepositoryScannerTestCase(
             items=[
                 f'{self.tmpdir.name}/file.txt',
                 f'{self.tmpdir.name}/file.py',
+                f'{self.tmpdir.name}/prod_env.key',
                 f'{self.tmpdir.name}/file.other',
                 f'{self.tmpdir.name}/test_file.cpp',
             ],
@@ -677,4 +710,35 @@ class GitRepositoryScannerTestCase(
         self.assertListEqual(
             list1=results,
             list2=[],
+        )
+
+    def test_scan_file_name(
+        self,
+    ):
+        grs = pyrepscan.GitRepositoryScanner()
+        grs.add_file_name_rule(
+            name='First Rule',
+            regex_pattern=r'(prod|dev|stage).+key',
+        )
+
+        results = grs.scan(
+            repository_path=self.tmpdir.name,
+            branch_glob_pattern='*',
+        )
+        for result in results:
+            result.pop('commit_id')
+        self.assertCountEqual(
+            first=results,
+            second=[
+                {
+                    'author_email': 'test@author.email',
+                    'author_name': 'Author Name',
+                    'commit_message': 'initial commit',
+                    'commit_time': '2000-01-01T00:00:00',
+                    'file_oid': 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391',
+                    'file_path': 'prod_env.key',
+                    'match': 'prod_env.key',
+                    'rule_name': 'First Rule'
+                },
+            ],
         )
