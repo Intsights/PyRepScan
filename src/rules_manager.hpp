@@ -134,9 +134,9 @@ class RulesManager {
     ) {
         std::vector<std::map<std::string, std::string>> matches;
         std::string match;
-        re2::StringPiece input(content);
 
         for (const auto & content_rule : this->content_rules) {
+            re2::StringPiece input(content);
             while (re2::RE2::FindAndConsume(&input, *content_rule.regex, &match)) {
                 bool blacklist_matched = std::any_of(
                     content_rule.blacklist_regexes.begin(),
