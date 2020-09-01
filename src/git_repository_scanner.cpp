@@ -78,14 +78,20 @@ class GitRepositoryScanner {
         git_revwalk_sorting(repo_revwalk, GIT_SORT_TIME);
         git_revwalk_push_glob(repo_revwalk, branch_glob_pattern.c_str());
 
-        git_commit * current_commit = nullptr;
-        while (git_revwalk_next(&oid, repo_revwalk) == 0) {
-            git_commit_lookup(&current_commit, git_repo, &oid);
-            git_time_t commit_time = git_commit_time(current_commit);
-            if (commit_time >= from_timestamp) {
+        if (from_timestamp == 0) {
+            while (git_revwalk_next(&oid, repo_revwalk) == 0) {
                 oids.push_back(oid);
             }
-            git_commit_free(current_commit);
+        } else {
+            git_commit * current_commit = nullptr;
+            while (git_revwalk_next(&oid, repo_revwalk) == 0) {
+                git_commit_lookup(&current_commit, git_repo, &oid);
+                git_time_t commit_time = git_commit_time(current_commit);
+                if (commit_time >= from_timestamp) {
+                    oids.push_back(oid);
+                }
+                git_commit_free(current_commit);
+            }
         }
 
         git_revwalk_free(repo_revwalk);
@@ -391,7 +397,7 @@ PYBIND11_MODULE(pyrepscan, m) {
             "Scan a repository for secrets",
             pybind11::arg("repository_path"),
             pybind11::arg("branch_glob_pattern"),
-            pybind11::arg("from_timestamp")
+            pybind11::arg("from_timestamp") = 0
         )
         .def(
             "add_content_rule",
