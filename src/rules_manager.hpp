@@ -72,9 +72,6 @@ struct FileNameRule {
         if (!regex->ok()) {
             throw std::runtime_error("Invalid regex pattern:\n\t" + regex_pattern + "\nError: " + regex->error());
         }
-        if (regex->NumberOfCapturingGroups() != 1) {
-            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: " + regex_pattern);
-        }
         this->regex = regex;
     }
 };
@@ -127,6 +124,29 @@ class RulesManager {
         }
 
         return true;
+    }
+
+    inline std::optional<std::vector<std::map<std::string, std::string>>> scan_file_name(
+        const std::string &file_name
+    ) {
+        std::vector<std::map<std::string, std::string>> matches;
+
+        for (const auto &file_name_rule: this->file_name_rules) {
+            if (re2::RE2::PartialMatch(file_name, *file_name_rule.regex)) {
+                matches.push_back(
+                    {
+                        {"rule_name", file_name_rule.name},
+                        {"match", file_name},
+                    }
+                );
+            }
+        }
+
+        if (matches.size() == 0) {
+            return std::nullopt;
+        } else {
+            return matches;
+        }
     }
 
     inline std::optional<std::vector<std::map<std::string, std::string>>> scan_content(
