@@ -2,9 +2,82 @@
 #include <map>
 #include <unordered_set>
 #include <optional>
+#include <algorithm>
 
 #include <re2/re2.h>
 #include <re2/set.h>
+
+
+struct ContentRule {
+    std::string name;
+    std::shared_ptr<re2::RE2> regex;
+    std::vector<std::shared_ptr<re2::RE2>> whitelist_regexes;
+    std::vector<std::shared_ptr<re2::RE2>> blacklist_regexes;
+
+    ContentRule(
+        std::string name,
+        std::string regex_pattern,
+        std::vector<std::string> whitelist_regex_patterns,
+        std::vector<std::string> blacklist_regex_patterns
+    ) {
+        this->name = name;
+
+        auto regex = std::make_shared<re2::RE2>(regex_pattern, re2::RE2::Quiet);
+        if (!regex->ok()) {
+            throw std::runtime_error("Invalid regex pattern: " + regex_pattern + "\nError: " + regex->error());
+        }
+        if (regex->NumberOfCapturingGroups() != 1) {
+            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: " + regex_pattern);
+        }
+        this->regex = regex;
+
+        for (const auto & whitelist_pattern : whitelist_regex_patterns) {
+            auto whitelist_regex = std::make_shared<re2::RE2>(whitelist_pattern, re2::RE2::Quiet);
+            if (!whitelist_regex->ok()) {
+                throw std::runtime_error("Invalid whitelist regex pattern: " + whitelist_pattern + "\nError: " + whitelist_regex->error());
+            }
+            if (whitelist_regex->NumberOfCapturingGroups() != 0) {
+                throw std::runtime_error("Whitelist regex pattern must not have a capturing group: " + whitelist_pattern + "");
+            }
+
+            this->whitelist_regexes.push_back(whitelist_regex);
+        }
+
+        for (const auto & blacklist_pattern : blacklist_regex_patterns) {
+            auto blacklist_regex = std::make_shared<re2::RE2>(blacklist_pattern, re2::RE2::Quiet);
+            if (!blacklist_regex->ok()) {
+                throw std::runtime_error("Invalid blacklist regex pattern: " + blacklist_pattern + "\nError: " + blacklist_regex->error());
+            }
+            if (blacklist_regex->NumberOfCapturingGroups() != 0) {
+                throw std::runtime_error("Blacklist regex pattern must not have a capturing group: " + blacklist_pattern + "");
+            }
+
+            this->blacklist_regexes.push_back(blacklist_regex);
+        }
+    }
+};
+
+
+struct FileNameRule {
+    std::string name;
+    std::shared_ptr<re2::RE2> regex;
+
+    FileNameRule(
+        std::string name,
+        std::string regex_pattern
+    ) {
+        this->name = name;
+
+        auto regex = std::make_shared<re2::RE2>(regex_pattern, re2::RE2::Quiet);
+        if (!regex->ok()) {
+            throw std::runtime_error("Invalid regex pattern:\n\t" + regex_pattern + "\nError: " + regex->error());
+        }
+        if (regex->NumberOfCapturingGroups() != 1) {
+            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: " + regex_pattern);
+        }
+        this->regex = regex;
+    }
+};
 
 
 class RulesManager {
@@ -13,66 +86,16 @@ class RulesManager {
 
     ~RulesManager() {}
 
-    void add_rule(
-        std::string name,
-        std::string match_pattern,
-        std::vector<std::string> match_whitelist_patterns,
-        std::vector<std::string> match_blacklist_patterns
+    void add_content_rule(
+        ContentRule rule
     ) {
-        re2::RE2 matching_regex(match_pattern, re2::RE2::Quiet);
-        if (!matching_regex.ok()) {
-            throw std::runtime_error("Invalid matching regex pattern: \"" + match_pattern + "\"");
-        }
-        if (matching_regex.NumberOfCapturingGroups() != 1) {
-            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: \"" + match_pattern + "\"");
-        }
+        this->content_rules.push_back(rule);
+    }
 
-        for (const auto & match_whitelist_pattern : match_whitelist_patterns) {
-            re2::RE2 match_whitelist_regex(match_whitelist_pattern, re2::RE2::Quiet);
-            if (!match_whitelist_regex.ok()) {
-                throw std::runtime_error("Invalid match validator regex pattern: \"" + match_whitelist_pattern + "\"");
-            }
-            if (match_whitelist_regex.NumberOfCapturingGroups() != 0) {
-                throw std::runtime_error("Match validator regex pattern must not have a capturing group: \"" + match_whitelist_pattern + "\"");
-            }
-        }
-
-        for (const auto & match_blacklist_pattern : match_blacklist_patterns) {
-            re2::RE2 match_blacklist_regex(match_blacklist_pattern, re2::RE2::Quiet);
-            if (!match_blacklist_regex.ok()) {
-                throw std::runtime_error("Invalid blacklist regex pattern: \"" + match_blacklist_pattern + "\"");
-            }
-            if (match_blacklist_regex.NumberOfCapturingGroups() != 0) {
-                throw std::runtime_error("Blacklist regex pattern must not have a capturing group: \"" + match_blacklist_pattern + "\"");
-            }
-        }
-
-        std::shared_ptr<re2::RE2::Set> match_blacklist_pattern_set = std::make_shared<re2::RE2::Set>(
-            re2::RE2::Quiet,
-            re2::RE2::UNANCHORED
-        );
-        for (const auto & match_blacklist_pattern : match_blacklist_patterns) {
-            match_blacklist_pattern_set->Add(match_blacklist_pattern, NULL);
-        }
-        match_blacklist_pattern_set->Compile();
-        this->match_blacklist_pattern_set.push_back(match_blacklist_pattern_set);
-
-        if (match_whitelist_patterns.size() == 0) {
-            this->match_whitelist_pattern_set.push_back(nullptr);
-        } else {
-            std::shared_ptr<re2::RE2::Set> match_whitelists_pattern_set = std::make_shared<re2::RE2::Set>(
-                re2::RE2::Quiet,
-                re2::RE2::UNANCHORED
-            );
-            for (const auto & match_whitelist_pattern : match_whitelist_patterns) {
-                match_whitelists_pattern_set->Add(match_whitelist_pattern, NULL);
-            }
-            match_whitelists_pattern_set->Compile();
-            this->match_whitelist_pattern_set.push_back(match_whitelists_pattern_set);
-        }
-
-        this->match_patterns.push_back(std::make_shared<re2::RE2>(match_pattern));
-        this->rule_names.push_back(name);
+    void add_file_name_rule(
+        FileNameRule rule
+    ) {
+        this->file_name_rules.push_back(rule);
     }
 
     void add_ignored_file_extension(
@@ -111,24 +134,35 @@ class RulesManager {
     ) {
         std::vector<std::map<std::string, std::string>> matches;
         std::string match;
+        re2::StringPiece input(content);
 
-        for (std::uint32_t pattern_index = 0; pattern_index < this->match_patterns.size(); ++pattern_index) {
-            re2::StringPiece input(content);
-            while (re2::RE2::FindAndConsume(&input, *this->match_patterns[pattern_index], &match)) {
-                if (this->match_blacklist_pattern_set[pattern_index]->Match(match, NULL)) {
+        for (const auto & content_rule : this->content_rules) {
+            while (re2::RE2::FindAndConsume(&input, *content_rule.regex, &match)) {
+                bool blacklist_matched = std::any_of(
+                    content_rule.blacklist_regexes.begin(),
+                    content_rule.blacklist_regexes.end(),
+                    [&match] (std::shared_ptr<re2::RE2> blacklist_regex) {
+                        return re2::RE2::PartialMatch(match, *blacklist_regex);
+                    }
+                );
+                if (blacklist_matched) {
                     continue;
                 }
 
-                if (
-                    this->match_whitelist_pattern_set[pattern_index] != nullptr &&
-                    !this->match_whitelist_pattern_set[pattern_index]->Match(match, NULL)
-                ) {
+                bool whitelist_not_matched = std::none_of(
+                    content_rule.whitelist_regexes.begin(),
+                    content_rule.whitelist_regexes.end(),
+                    [&match] (std::shared_ptr<re2::RE2> whitelist_regex) {
+                        return re2::RE2::PartialMatch(match, *whitelist_regex);
+                    }
+                );
+                if (!content_rule.whitelist_regexes.empty() && whitelist_not_matched) {
                     continue;
                 }
 
                 matches.push_back(
                     {
-                        {"rule_name", this->rule_names[pattern_index]},
+                        {"rule_name", content_rule.name},
                         {"match", match},
                     }
                 );
@@ -146,18 +180,18 @@ class RulesManager {
         const std::string &content,
         const std::string &pattern
     ) {
-        re2::RE2 matching_regex(pattern, re2::RE2::Quiet);
-        if (!matching_regex.ok()) {
-            throw std::runtime_error("Invalid matching regex pattern: \"" + pattern + "\"");
+        re2::RE2 regex(pattern, re2::RE2::Quiet);
+        if (!regex.ok()) {
+            throw std::runtime_error("Invalid regex pattern: " + pattern + "\nError: " + regex.error());
         }
-        if (matching_regex.NumberOfCapturingGroups() != 1) {
-            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: \"" + pattern + "\"");
+        if (regex.NumberOfCapturingGroups() != 1) {
+            throw std::runtime_error("Matching regex pattern must have exactly one capturing group: " + pattern);
         }
 
         std::vector<std::string> matches;
         re2::StringPiece input(content);
         std::string match;
-        while (re2::RE2::FindAndConsume(&input, matching_regex, &match)) {
+        while (re2::RE2::FindAndConsume(&input, regex, &match)) {
             matches.push_back(match);
         }
 
@@ -167,8 +201,6 @@ class RulesManager {
     private:
     std::unordered_set<std::string> ignored_file_extensions;
     std::unordered_set<std::string> ignored_file_paths;
-    std::vector<std::string> rule_names;
-    std::vector<std::shared_ptr<re2::RE2::Set>> match_whitelist_pattern_set;
-    std::vector<std::shared_ptr<re2::RE2::Set>> match_blacklist_pattern_set;
-    std::vector<std::shared_ptr<re2::RE2>> match_patterns;
+    std::vector<ContentRule> content_rules;
+    std::vector<FileNameRule> file_name_rules;
 };

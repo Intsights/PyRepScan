@@ -25,13 +25,32 @@ class GitRepositoryScanner {
         git_libgit2_shutdown();
     }
 
-    void add_rule(
+    void add_content_rule(
         std::string name,
-        std::string match_pattern,
-        std::vector<std::string> match_whitelist_patterns,
-        std::vector<std::string> match_blacklist_patterns
+        std::string regex_pattern,
+        std::vector<std::string> whitelist_regex_patterns,
+        std::vector<std::string> blacklist_regex_patterns
     ) {
-        this->rules_manager.add_rule(name, match_pattern, match_whitelist_patterns, match_blacklist_patterns);
+        ContentRule rule(
+            name,
+            regex_pattern,
+            whitelist_regex_patterns,
+            blacklist_regex_patterns
+        );
+
+        this->rules_manager.add_content_rule(rule);
+    }
+
+    void add_file_name_rule(
+        std::string name,
+        std::string regex_pattern
+    ) {
+        FileNameRule rule(
+            name,
+            regex_pattern
+        );
+
+        this->rules_manager.add_file_name_rule(rule);
     }
 
     void add_ignored_file_extension(
@@ -265,19 +284,26 @@ class GitRepositoryScanner {
 
 
 PYBIND11_MODULE(pyrepscan, m) {
+    pybind11::class_<ContentRule>(m, "ContentRule")
+        .def(
+            pybind11::init<std::string, std::string, std::vector<std::string>, std::vector<std::string>>(),
+            "",
+            pybind11::arg("name"),
+            pybind11::arg("regex_pattern"),
+            pybind11::arg("whitelist_regex_patterns"),
+            pybind11::arg("blacklist_regex_patterns")
+        );
+
     pybind11::class_<RulesManager>(m, "RulesManager")
         .def(
             pybind11::init<>(),
             ""
         )
         .def(
-            "add_rule",
-            &RulesManager::add_rule,
+            "add_content_rule",
+            &RulesManager::add_content_rule,
             "",
-            pybind11::arg("name"),
-            pybind11::arg("match_pattern"),
-            pybind11::arg("match_whitelist_patterns"),
-            pybind11::arg("match_blacklist_patterns")
+            pybind11::arg("rule")
         )
         .def(
             "add_ignored_file_extension",
@@ -325,13 +351,13 @@ PYBIND11_MODULE(pyrepscan, m) {
             pybind11::arg("from_timestamp")
         )
         .def(
-            "add_rule",
-            &GitRepositoryScanner::add_rule,
+            "add_content_rule",
+            &GitRepositoryScanner::add_content_rule,
             "Adding a rule to the list of rules.",
             pybind11::arg("name"),
-            pybind11::arg("match_pattern"),
-            pybind11::arg("match_whitelist_patterns"),
-            pybind11::arg("match_blacklist_patterns")
+            pybind11::arg("regex_pattern"),
+            pybind11::arg("whitelist_regex_patterns"),
+            pybind11::arg("blacklist_regex_patterns")
         )
         .def(
             "add_ignored_file_extension",

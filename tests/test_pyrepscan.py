@@ -72,11 +72,13 @@ class RulesManagerTestCase(
     ):
         rules_manager = pyrepscan.RulesManager()
 
-        rules_manager.add_rule(
-            name='rule_one',
-            match_pattern=r'([a-z]+)',
-            match_whitelist_patterns=[],
-            match_blacklist_patterns=[],
+        rules_manager.add_content_rule(
+            rule=pyrepscan.ContentRule(
+                name='rule_one',
+                regex_pattern=r'([a-z]+)',
+                whitelist_regex_patterns=[],
+                blacklist_regex_patterns=[],
+            ),
         )
 
         matches = rules_manager.scan_content(
@@ -117,13 +119,15 @@ class RulesManagerTestCase(
     ):
         rules_manager = pyrepscan.RulesManager()
 
-        rules_manager.add_rule(
-            name='rule_one',
-            match_pattern=r'([a-z]+)',
-            match_whitelist_patterns=[],
-            match_blacklist_patterns=[
-                r'line',
-            ],
+        rules_manager.add_content_rule(
+            rule=pyrepscan.ContentRule(
+                name='rule_one',
+                regex_pattern=r'([a-z]+)',
+                whitelist_regex_patterns=[],
+                blacklist_regex_patterns=[
+                    r'line',
+                ],
+            ),
         )
 
         matches = rules_manager.scan_content(
@@ -152,16 +156,18 @@ class RulesManagerTestCase(
     ):
         rules_manager = pyrepscan.RulesManager()
 
-        rules_manager.add_rule(
-            name='rule_one',
-            match_pattern=r'([a-z]+)',
-            match_whitelist_patterns=[
-                'second',
-                'third',
-            ],
-            match_blacklist_patterns=[
-                r'line',
-            ],
+        rules_manager.add_content_rule(
+            rule=pyrepscan.ContentRule(
+                name='rule_one',
+                regex_pattern=r'([a-z]+)',
+                whitelist_regex_patterns=[
+                    'second',
+                    'third',
+                ],
+                blacklist_regex_patterns=[
+                    r'line',
+                ],
+            ),
         )
 
         matches = rules_manager.scan_content(
@@ -189,102 +195,114 @@ class RulesManagerTestCase(
         with self.assertRaises(
             expected_exception=RuntimeError,
         ) as context:
-            rules_manager.add_rule(
-                name='rule_one',
-                match_pattern=r'(',
-                match_whitelist_patterns=[],
-                match_blacklist_patterns=[],
+            rules_manager.add_content_rule(
+                rule=pyrepscan.ContentRule(
+                    name='rule_one',
+                    regex_pattern=r'(',
+                    whitelist_regex_patterns=[],
+                    blacklist_regex_patterns=[],
+                ),
             )
 
         self.assertEqual(
-            first='Invalid matching regex pattern: "("',
+            first='Invalid regex pattern: (\nError: missing ): (',
             second=str(context.exception),
         )
 
         with self.assertRaises(
             expected_exception=RuntimeError,
         ) as context:
-            rules_manager.add_rule(
-                name='rule_one',
-                match_pattern=r'regex_pattern_without_capturing_group',
-                match_whitelist_patterns=[],
-                match_blacklist_patterns=[],
+            rules_manager.add_content_rule(
+                rule=pyrepscan.ContentRule(
+                    name='rule_one',
+                    regex_pattern=r'regex_pattern_without_capturing_group',
+                    whitelist_regex_patterns=[],
+                    blacklist_regex_patterns=[],
+                ),
             )
 
         self.assertEqual(
-            first='Matching regex pattern must have exactly one capturing group: "regex_pattern_without_capturing_group"',
+            first='Matching regex pattern must have exactly one capturing group: regex_pattern_without_capturing_group',
             second=str(context.exception),
         )
 
         with self.assertRaises(
             expected_exception=RuntimeError,
         ) as context:
-            rules_manager.add_rule(
-                name='rule_two',
-                match_pattern=r'(content)',
-                match_whitelist_patterns=[],
-                match_blacklist_patterns=[
-                    '(',
-                ],
+            rules_manager.add_content_rule(
+                rule=pyrepscan.ContentRule(
+                    name='rule_two',
+                    regex_pattern=r'(content)',
+                    whitelist_regex_patterns=[],
+                    blacklist_regex_patterns=[
+                        '(',
+                    ],
+                ),
             )
 
         self.assertEqual(
-            first='Invalid blacklist regex pattern: "("',
+            first='Invalid blacklist regex pattern: (\nError: missing ): (',
             second=str(context.exception),
         )
 
         with self.assertRaises(
             expected_exception=RuntimeError,
         ) as context:
-            rules_manager.add_rule(
-                name='rule_two',
-                match_pattern=r'(content)',
-                match_whitelist_patterns=[],
-                match_blacklist_patterns=[
-                    '(blacklist_regex_with_capturing_group)',
-                ],
+            rules_manager.add_content_rule(
+                rule=pyrepscan.ContentRule(
+                    name='rule_two',
+                    regex_pattern=r'(content)',
+                    whitelist_regex_patterns=[],
+                    blacklist_regex_patterns=[
+                        '(blacklist_regex_with_capturing_group)',
+                    ],
+                ),
             )
 
         self.assertEqual(
-            first='Blacklist regex pattern must not have a capturing group: "(blacklist_regex_with_capturing_group)"',
+            first='Blacklist regex pattern must not have a capturing group: (blacklist_regex_with_capturing_group)',
             second=str(context.exception),
         )
 
         with self.assertRaises(
             expected_exception=RuntimeError,
         ) as context:
-            rules_manager.add_rule(
-                name='rule_two',
-                match_pattern=r'(content)',
-                match_whitelist_patterns=[
-                    '(',
-                ],
-                match_blacklist_patterns=[
-                    'blacklist_regex_with_capturing_group',
-                ],
+            rules_manager.add_content_rule(
+                rule=pyrepscan.ContentRule(
+                    name='rule_two',
+                    regex_pattern=r'(content)',
+                    whitelist_regex_patterns=[
+                        '(',
+                    ],
+                    blacklist_regex_patterns=[
+                        'blacklist_regex_with_capturing_group',
+                    ],
+                ),
             )
 
         self.assertEqual(
-            first='Invalid match validator regex pattern: "("',
+            first='Invalid whitelist regex pattern: (\nError: missing ): (',
             second=str(context.exception),
         )
 
         with self.assertRaises(
             expected_exception=RuntimeError,
         ) as context:
-            rules_manager.add_rule(
-                name='rule_two',
-                match_pattern=r'(content)',
-                match_whitelist_patterns=[
-                    '(sub)',
-                ],
-                match_blacklist_patterns=[
-                    'blacklist_regex_with_capturing_group',
-                ],
+            rules_manager.add_content_rule(
+                rule=pyrepscan.ContentRule(
+                    name='rule_two',
+                    regex_pattern=r'(content)',
+                    whitelist_regex_patterns=[
+                        '(sub)',
+                    ],
+                    blacklist_regex_patterns=[
+                        'blacklist_regex_with_capturing_group',
+                    ],
+                ),
             )
 
         self.assertEqual(
-            first='Match validator regex pattern must not have a capturing group: "(sub)"',
+            first='Whitelist regex pattern must not have a capturing group: (sub)',
             second=str(context.exception),
         )
 
@@ -302,7 +320,7 @@ class RulesManagerTestCase(
             )
 
         self.assertEqual(
-            first='Matching regex pattern must have exactly one capturing group: "content"',
+            first='Matching regex pattern must have exactly one capturing group: content',
             second=str(context.exception),
         )
 
@@ -315,7 +333,7 @@ class RulesManagerTestCase(
             )
 
         self.assertEqual(
-            first='Invalid matching regex pattern: "(content"',
+            first='Invalid regex pattern: (content\nError: missing ): (content',
             second=str(context.exception),
         )
 
@@ -464,11 +482,11 @@ class GitRepositoryScannerTestCase(
         self,
     ):
         grs = pyrepscan.GitRepositoryScanner()
-        grs.add_rule(
+        grs.add_content_rule(
             name='First Rule',
-            match_pattern=r'''(content)''',
-            match_whitelist_patterns=[],
-            match_blacklist_patterns=[],
+            regex_pattern=r'''(content)''',
+            whitelist_regex_patterns=[],
+            blacklist_regex_patterns=[],
         )
 
         grs.add_ignored_file_extension('py')
@@ -596,80 +614,11 @@ class GitRepositoryScannerTestCase(
         self,
     ):
         grs = pyrepscan.GitRepositoryScanner()
-        grs.add_rule(
+        grs.add_content_rule(
             name='First Rule',
-            match_pattern=r'''(content)''',
-            match_whitelist_patterns=[],
-            match_blacklist_patterns=[],
-        )
-
-        grs.add_ignored_file_extension('py')
-        grs.add_ignored_file_path('test_')
-
-        results = grs.scan(
-            repository_path=self.tmpdir.name,
-            branch_glob_pattern='*',
-            from_timestamp=int(
-                datetime.datetime(
-                    year=2004,
-                    month=1,
-                    day=1,
-                    hour=0,
-                    minute=0,
-                    second=0,
-                    tzinfo=datetime.timezone.utc,
-                ).timestamp()
-            ),
-        )
-        for result in results:
-            result.pop('commit_id')
-        self.assertCountEqual(
-            first=results,
-            second=[
-                {
-                    'author_email': 'test@author.email',
-                    'author_name': 'Author Name',
-                    'commit_message': 'edited file in non_merged_branch',
-                    'commit_time': '2004-01-01T00:00:00',
-                    'file_oid': '057032a2108721ad1de6a9240fd1a8f45bc3f2ef',
-                    'file_path': 'file.txt',
-                    'match': 'content',
-                    'rule_name': 'First Rule'
-                },
-            ],
-        )
-
-        results = grs.scan(
-            repository_path=self.tmpdir.name,
-            branch_glob_pattern='*',
-            from_timestamp=int(
-                datetime.datetime(
-                    year=2004,
-                    month=1,
-                    day=1,
-                    hour=0,
-                    minute=0,
-                    second=1,
-                    tzinfo=datetime.timezone.utc,
-                ).timestamp()
-            ),
-        )
-        for result in results:
-            result.pop('commit_id')
-        self.assertListEqual(
-            list1=results,
-            list2=[],
-        )
-
-    def test_scan_encoding(
-        self,
-    ):
-        grs = pyrepscan.GitRepositoryScanner()
-        grs.add_rule(
-            name='First Rule',
-            match_pattern=r'''(content)''',
-            match_whitelist_patterns=[],
-            match_blacklist_patterns=[],
+            regex_pattern=r'''(content)''',
+            whitelist_regex_patterns=[],
+            blacklist_regex_patterns=[],
         )
 
         grs.add_ignored_file_extension('py')
