@@ -1,0 +1,24 @@
+[package]
+name = "pyrepscan"
+version = "0.1.0"
+authors = ["Gal Ben David <gal@intsights.com>"]
+edition = "2018"
+
+[lib]
+name = "pyrepscan"
+crate-type = ["cdylib"]
+
+[dependencies]
+git2 = "*"
+regex = "*"
+rayon = "*"
+chrono = "*"
+parking_lot = "*"
+
+[dependencies.pyo3]
+version = "0.12"
+features = ["extension-module"]
+
+[profile.release]
+lto = true
+panic = "abort"

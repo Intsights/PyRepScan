@@ -3,7 +3,7 @@
         <img src="https://raw.githubusercontent.com/intsights/PyRepScan/master/images/logo.png" alt="Logo">
     </a>
     <h3 align="center">
-        A Git Repository Leaks Scanner Python library written in C++
+        A Git Repository Secrets Scanner written in Rust
     </h3>
 </p>
 
@@ -19,7 +19,6 @@
   - [Built With](#built-with)
   - [Performance](#performance)
     - [CPU](#cpu)
-  - [Prerequisites](#prerequisites)
   - [Installation](#installation)
 - [Documentation](#documentation)
 - [Usage](#usage)
@@ -29,36 +28,24 @@
 
 ## About The Project
 
-PyRepScan is a python library written in C++. The library uses [libgit2](https://github.com/libgit2/libgit2) for repository parsing and traversing, [re2](https://github.com/google/re2) for regex pattern matching and [taskflow](https://github.com/taskflow/taskflow) for concurrency. The library was written to achieve high performance and python bindings.
+PyRepScan is a python library written in Rust. The library uses [git2-rs](https://github.com/rust-lang/git2-rs) for repository parsing and traversing, [regex](https://github.com/rust-lang/regex) for regex pattern matching and [rayon](https://github.com/rayon-rs/rayon) for concurrency. The library was written to achieve high performance and python bindings.
 
 
 ### Built With
 
-* [libgit2](https://github.com/libgit2/libgit2)
-* [re2](https://github.com/google/re2)
-* [taskflow](https://github.com/taskflow/taskflow)
+* [git2-rs](https://github.com/rust-lang/git2-rs)
+* [regex](https://github.com/rust-lang/regex)
+* [rayon](https://github.com/rayon-rs/rayon)
 
 
 ### Performance
 
 #### CPU
-| Library | Time | Improvement Factor |
+| Library | Time | Peak Memory |
 | ------------- | ------------- | ------------- |
-| [PyRepScan](https://github.com/intsights/PyRepScan) | 2.18s | 1.0x |
-| [gitleaks](https://github.com/zricethezav/gitleaks) | 63.0s | 28.9x |
+| [PyRepScan](https://github.com/intsights/PyRepScan) | 4s | 501,708 kb |
+| [gitleaks](https://github.com/zricethezav/gitleaks) | 507s | 823,016 kb |
 
-
-### Prerequisites
-
-In order to compile this package you should have GCC & Python development package installed.
-* Fedora
-```sh
-sudo dnf install python3-devel gcc-c++ libgit2-devel re2-devel
-```
-* Ubuntu 20.04
-```sh
-sudo apt install python3-dev libgit2-dev libre2-dev
-```
 
 ### Installation
 
@@ -82,47 +69,47 @@ This class holds all the added rules for fast reuse.
 def add_content_rule(
     self,
     name: str,
-    regex_pattern: str,
-    whitelist_regex_patterns: typing.List[str],
-    blacklist_regex_patterns: typing.List[str],
+    pattern: str,
+    whitelist_patterns: typing.List[str],
+    blacklist_patterns: typing.List[str],
 ) -> None
 ```
 The `add_content_rule` function adds a new rule to an internal list of rules that could be reused multiple times against different repositories. The same name can be used multiple times and would lead to results which can hold the same name. Content rule means that the regex pattern would be tested against the content of the files.
 - `name` - The name of the rule so it can be identified.
-- `regex_pattern` - The regex pattern (RE2 syntax) to match against the content of the commited files.
-- `whitelist_regex_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter in results. Only one of the patterns should be matched to pass through the result. There is an OR relation between the patterns.
-- `blacklist_regex_patterns` - A list of regex patterns (RE2 syntax) to match against the content of the committed file to filter out results. Only one of the patterns should be matched to omit the result. There is an OR relation between the patterns.
+- `pattern` - The regex pattern (Rust Regex syntax) to match against the content of the commited files.
+- `whitelist_patterns` - A list of regex patterns (Rust Regex syntax) to match against the content of the committed file to filter in results. Only one of the patterns should be matched to pass through the result. There is an OR relation between the patterns.
+- `blacklist_patterns` - A list of regex patterns (Rust Regex syntax) to match against the content of the committed file to filter out results. Only one of the patterns should be matched to omit the result. There is an OR relation between the patterns.
 
 
 ```python
-def add_file_name_rule(
+def add_file_path_rule(
     self,
     name: str,
-    regex_pattern: str,
+    pattern: str,
 ) -> None
 ```
-The `add_file_name_rule` function adds a new rule to an internal list of rules that could be reused multiple times against different repositories. The same name can be used multiple times and would lead to results which can hold the same name. File name rule means that the regex pattern would be tested against the file names.
+The `add_file_path_rule` function adds a new rule to an internal list of rules that could be reused multiple times against different repositories. The same name can be used multiple times and would lead to results which can hold the same name. File name rule means that the regex pattern would be tested against the file paths.
 - `name` - The name of the rule so it can be identified.
-- `regex_pattern` - The regex pattern (RE2 syntax) to match against the file names of the commited files.
+- `pattern` - The regex pattern (Rust Regex syntax) to match against the file paths of the commited files.
 
 
 ```python
-def add_ignored_file_extension(
+def add_file_extension_to_skip(
     self,
     file_extension: str,
 ) -> None
 ```
-The `add_ignored_file_extension` function adds a new file extension to the filtering phase to reduce the amount of inspected files and to increase the performance of the scan.
+The `add_file_extension_to_skip` function adds a new file extension to the filtering phase to reduce the amount of inspected files and to increase the performance of the scan.
 - `file_extension` - A file extension, without a leading dot, to filter out from the scan.
 
 
 ```python
-def add_ignored_file_path(
+def add_file_path_to_skip(
     self,
     file_path: str,
 ) -> None
 ```
-The `add_ignored_file_path` function adds a new file pattern to the filtering phase to reduce the amount of inspected files and to increase the performance of the scan. Every file path that would include the `file_path` substring would be left out of the scanned files.
+The `add_file_path_to_skip` function adds a new file path pattern to the filtering phase to reduce the amount of inspected files and to increase the performance of the scan. Every file path that would include the `file_path` substring would be left out of the scanned files.
 - `file_path` - If the inspected file path would include this substring, it won't be scanned. This parameter is a free text.
 
 
@@ -130,14 +117,14 @@ The `add_ignored_file_path` function adds a new file pattern to the filtering ph
 def scan(
     self,
     repository_path: str,
-    branch_glob_pattern: '*',
-    from_timestamp: int = 0,
+    branch_glob_pattern: typing.Optional[str],
+    from_timestamp: typing.Optional[int],
 ) -> typing.List[typing.Dict[str, str]]
 ```
 The `scan` function is the main function in the library. Calling this function would trigger a new scan that would return a list of matches. The scan function is a multithreaded operation, that would utilize all the available core in the system. The results would not include the file content but only the regex matching group. To retrieve the full file content one should take the `results['oid']` and to call `get_file_content` function.
 - `repository_path` - The git repository folder path.
-- `branch_glob_pattern` - A glob pattern to filter branches for the scan.
-- `from_timestamp` - A UTC timestamp (Int) that only commits that were created after this timestamp would be included in the scan.
+- `branch_glob_pattern` - A glob pattern to filter branches for the scan. If None is sent, defaults to `*`.
+- `from_timestamp` - A UTC timestamp (Int) that only commits that were created after this timestamp would be included in the scan. If None is sent, defaults to `0`.
 
 A sample result would look like this:
 ```python
@@ -157,6 +144,7 @@ A sample result would look like this:
 
 ```python
 def get_file_content(
+    self,
     repository_path: str,
     file_oid: str,
 ) -> bytes
@@ -176,32 +164,32 @@ grs = pyrepscan.GitRepositoryScanner()
 # Adds a specific rule, can be called multiple times or none
 grs.add_content_rule(
     name='First Rule',
-    regex_pattern=r'(-----BEGIN PRIVATE KEY-----)',
-    whitelist_regex_patterns=[],
-    blacklist_regex_patterns=[],
+    pattern=r'(-----BEGIN PRIVATE KEY-----)',
+    whitelist_patterns=[],
+    blacklist_patterns=[],
 )
-grs.add_file_name_rule(
+grs.add_file_path_rule(
     name='Second Rule',
-    regex_pattern=r'.+\.pem',
+    pattern=r'.+\.pem',
 )
-grs.add_file_name_rule(
+grs.add_file_path_rule(
     name='Third Rule',
-    regex_pattern=r'(prod|dev|stage).+key',
+    pattern=r'(prod|dev|stage).+key',
 )
 
 # Add file extensions to ignore during the search
-grs.add_ignored_file_extension(
+grs.add_file_extension_to_skip(
     file_extension='bin',
 )
-grs.add_ignored_file_extension(
+grs.add_file_extension_to_skip(
     file_extension='jpg',
 )
 
 # Add file paths to ignore during the search. Free text is allowed
-grs.add_ignored_file_path(
+grs.add_file_path_to_skip(
     file_path='site-packages',
 )
-grs.add_ignored_file_path(
+grs.add_file_path_to_skip(
     file_path='node_modules',
 )
 
