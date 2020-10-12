@@ -1,6 +1,6 @@
 [package]
 name = "pyrepscan"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Gal Ben David <gal@intsights.com>"]
 edition = "2018"
 description = "A Git Repository Secrets Scanner written in Rust"
@@ -20,6 +20,7 @@ classifier = [
     "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Rust",
 ]
 
