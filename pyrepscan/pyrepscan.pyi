@@ -3,7 +3,7 @@ import typing
 
 class GitRepositoryScanner:
     def __init__(
-      self,
+        self,
     ) -> None: ...
 
     def add_content_rule(
@@ -46,7 +46,7 @@ class GitRepositoryScanner:
 
 class RulesManager:
     def __init__(
-      self,
+        self,
     ) -> None: ...
 
     def add_content_rule(

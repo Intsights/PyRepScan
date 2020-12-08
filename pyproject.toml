@@ -14,7 +14,7 @@ strip = true
 
 [tool.poetry]
 name = "pyrepscan"
-version = "0.7.2"
+version = "0.7.3"
 authors = ["Gal Ben David <gal@intsights.com>"]
 description = "A Git Repository Secrets Scanner written in Rust"
 readme = "README.md"

@@ -466,7 +466,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_one',
                     'match_text': 'some_text',
-                }
+                },
             ],
         )
 
@@ -489,7 +489,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_two',
                     'match_text': 'some',
-                }
+                },
             ],
         )
 
@@ -521,7 +521,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_one',
                     'match_text': 'some_other',
-                }
+                },
             ],
         )
 
@@ -560,7 +560,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_one',
                     'match_text': 'some_diff',
-                }
+                },
             ],
         )
 
@@ -598,7 +598,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_one',
                     'match_text': 'some_diff',
-                }
+                },
             ],
         )
 
@@ -631,7 +631,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_one',
                     'match_text': 'some_other',
-                }
+                },
             ],
         )
         self.assertEqual(
@@ -643,7 +643,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_one',
                     'match_text': 'some_diff',
-                }
+                },
             ],
         )
 
@@ -683,7 +683,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_one',
                     'match_text': '/path/to/dev.txt',
-                }
+                },
             ],
         )
 
@@ -704,7 +704,7 @@ class RulesManagerTestCase(
                 {
                     'rule_name': 'rule_two',
                     'match_text': '/path/to/dev.txt',
-                }
+                },
             ],
         )
 

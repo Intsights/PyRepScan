@@ -1,5 +1,6 @@
 import pyrepscan
 
+
 grs = pyrepscan.GitRepositoryScanner()
 grs.add_content_rule(
     name='AWS Manager ID',
