@@ -1,6 +1,6 @@
 [package]
 name = "pyrepscan"
-version = "0.7.3"
+version = "0.7.4"
 authors = ["Gal Ben David <gal@intsights.com>"]
 edition = "2018"
 description = "A Git Repository Secrets Scanner written in Rust"
@@ -36,7 +36,7 @@ chrono = "0.4"
 parking_lot = "0.11"
 
 [dependencies.pyo3]
-version = "0.12.4"
+version = "0.13.1"
 features = ["extension-module"]
 
 [profile.release]
