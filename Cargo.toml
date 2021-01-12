@@ -29,11 +29,14 @@ name = "pyrepscan"
 crate-type = ["cdylib"]
 
 [dependencies]
-git2 = "0.13"
 regex = "1"
 rayon = "1.5"
 chrono = "0.4"
 parking_lot = "0.11"
+
+[dependencies.git2]
+version = "0.13"
+default-features = false
 
 [dependencies.pyo3]
 version = "0.13.1"
