@@ -13,6 +13,8 @@ class GitRepositoryScannerTestCase(
         self,
     ):
         self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+
         bare_repo = git.Repo.init(
             path=self.tmpdir.name,
         )

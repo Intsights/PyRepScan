@@ -1,6 +1,7 @@
 mod git_repository_scanner;
 mod rules_manager;
 
+use git2::Repository;
 use parking_lot::Mutex;
 use pyo3::exceptions;
 use pyo3::prelude::*;
@@ -200,6 +201,52 @@ impl GitRepositoryScanner {
         from_timestamp: Option<i64>,
     ) -> PyResult<Py<PyAny>> {
         let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
+
+        if let Err(error) = git_repository_scanner::scan_repository(
+            repository_path,
+            branch_glob_pattern.unwrap_or("*"),
+            from_timestamp.unwrap_or(0),
+            &self.rules_manager,
+            matches.clone(),
+        ) {
+            Err(exceptions::PyRuntimeError::new_err(error.to_string()))
+        } else {
+            Ok(matches.lock().to_object(py))
+        }
+    }
+
+    /// Scan a git repository for secrets. Rules shuld be loaded before calling this function.
+    ///
+    /// input:
+    ///     url: str -> URL of a git repository
+    ///     repository_path: str ->  The path to clone the repository to
+    ///     branch_glob_pattern: str ->  A blob pattern to match against the git branches names.
+    ///         Only matched branches will be scanned.
+    ///     from_timestamp: int = 0 ->  Unix epoch timestamp to start the scan from.
+    ///
+    /// returns:
+    ///     list[dict] -> List of matches
+    ///
+    /// example:
+    ///     grs.scan_from_url(
+    ///         url="https://github.com/rust-lang/git2-rs",
+    ///         repository_path="/path/to/repository",
+    ///         branch_glob_pattern="*",
+    ///     )
+    #[text_signature = "(url, repository_path, branch_glob_pattern, from_timestamp, /)"]
+    fn scan_from_url(
+        &self,
+        py: Python,
+        url: &str,
+        repository_path: &str,
+        branch_glob_pattern: Option<&str>,
+        from_timestamp: Option<i64>,
+    ) -> PyResult<Py<PyAny>> {
+        let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
+
+        if let Err(error) = Repository::clone(url, repository_path) {
+            return Err(exceptions::PyRuntimeError::new_err(error.to_string()));
+        };
 
         if let Err(error) = git_repository_scanner::scan_repository(
             repository_path,

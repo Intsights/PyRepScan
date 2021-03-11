@@ -14,7 +14,7 @@ strip = true
 
 [tool.poetry]
 name = "pyrepscan"
-version = "0.7.4"
+version = "0.8.0"
 authors = ["Gal Ben David <gal@intsights.com>"]
 description = "A Git Repository Secrets Scanner written in Rust"
 readme = "README.md"
@@ -49,3 +49,13 @@ gitpython = "*"
 wheel = "*"
 pytest-runner = "*"
 maturin = "*"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "--tb=native",
+    "--pythonwarnings=all",
+]
+testpaths = [
+    "tests",
+]

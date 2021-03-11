@@ -143,6 +143,22 @@ A sample result would look like this:
 
 
 ```python
+def scan_from_url(
+    self,
+    url: str,
+    repository_path: str,
+    branch_glob_pattern: typing.Optional[str],
+    from_timestamp: typing.Optional[int],
+) -> typing.List[typing.Dict[str, str]]
+```
+The same as `scan` function but also clones a repository from a given URL into the provided repository path.
+- `url` - URL of a git repository.
+- `repository_path` - The path to clone the repository to
+- `branch_glob_pattern` - A glob pattern to filter branches for the scan. If None is sent, defaults to `*`.
+- `from_timestamp` - A UTC timestamp (Int) that only commits that were created after this timestamp would be included in the scan. If None is sent, defaults to `0`.
+
+
+```python
 def get_file_content(
     self,
     repository_path: str,

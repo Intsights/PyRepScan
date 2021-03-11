@@ -2,12 +2,12 @@ use crate::rules_manager;
 
 use chrono::prelude::*;
 use git2::{Oid, Repository, Delta};
+use git2::Error;
 use parking_lot::Mutex;
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::sync::Arc;
-use git2::Error;
 use std::path::Path;
+use std::sync::Arc;
 
 fn scan_commit_oid(
     git_repo: &Repository,
@@ -152,13 +152,19 @@ pub fn scan_repository(
             }
         }
     }
+
+    let chunk_size = (oids.len() as f64 / (num_cpus::get() * 5) as f64).ceil() as usize;
     if !oids.is_empty() {
-        let chunk_size = (oids.len() as f64 / 100.0).ceil();
-        oids.par_chunks(chunk_size as usize).for_each_init(
-            || Repository::open(repository_path).unwrap(),
-            |git_repo, oids| {
+        oids.par_chunks(chunk_size).for_each(
+            |oids| {
+                let git_repo = Repository::open(repository_path).unwrap();
                 for oid in oids {
-                    scan_commit_oid(git_repo, oid, rules_manager, output_matches.clone()).unwrap_or(());
+                    scan_commit_oid(
+                        &git_repo,
+                        oid,
+                        rules_manager,
+                        output_matches.clone()
+                    ).unwrap_or(());
                 }
             },
         );

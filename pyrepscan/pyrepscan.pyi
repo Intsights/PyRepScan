@@ -37,6 +37,14 @@ class GitRepositoryScanner:
         from_timestamp: typing.Optional[int],
     ) -> typing.List[typing.Dict[str, str]]: ...
 
+    def scan_from_url(
+        self,
+        url: str,
+        repository_path: str,
+        branch_glob_pattern: typing.Optional[str],
+        from_timestamp: typing.Optional[int],
+    ) -> typing.List[typing.Dict[str, str]]: ...
+
     def get_file_content(
         self,
         repository_path: str,
