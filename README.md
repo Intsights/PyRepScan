@@ -28,14 +28,15 @@
 
 ## About The Project
 
-PyRepScan is a python library written in Rust. The library uses [git2-rs](https://github.com/rust-lang/git2-rs) for repository parsing and traversing, [regex](https://github.com/rust-lang/regex) for regex pattern matching and [rayon](https://github.com/rayon-rs/rayon) for concurrency. The library was written to achieve high performance and python bindings.
+PyRepScan is a python library written in Rust. The library uses [git2-rs](https://github.com/rust-lang/git2-rs) for repository parsing and traversing, [regex](https://github.com/rust-lang/regex) for regex pattern matching and [crossbeam](https://github.com/crossbeam-rs/crossbeam) for concurrency. The library was written to achieve high performance and python bindings.
 
 
 ### Built With
 
 * [git2-rs](https://github.com/rust-lang/git2-rs)
 * [regex](https://github.com/rust-lang/regex)
-* [rayon](https://github.com/rayon-rs/rayon)
+* [crossbeam](https://github.com/crossbeam-rs/crossbeam)
+* [parking-lot](https://github.com/Amanieu/parking_lot)
 
 
 ### Performance
@@ -43,8 +44,8 @@ PyRepScan is a python library written in Rust. The library uses [git2-rs](https:
 #### CPU
 | Library | Time | Peak Memory |
 | ------------- | ------------- | ------------- |
-| [PyRepScan](https://github.com/intsights/PyRepScan) | 4s | 501,708 kb |
-| [gitleaks](https://github.com/zricethezav/gitleaks) | 507s | 823,016 kb |
+| [PyRepScan](https://github.com/intsights/PyRepScan) | 8.74s | 1,149,152 kb |
+| [gitleaks](https://github.com/zricethezav/gitleaks) | 1118s | 1,146,300 kb |
 
 
 ### Installation
