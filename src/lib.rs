@@ -1,12 +1,12 @@
 mod git_repository_scanner;
 mod rules_manager;
 
-use git2::Repository;
 use parking_lot::Mutex;
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// GitRepositoryScanner class
@@ -201,17 +201,16 @@ impl GitRepositoryScanner {
         from_timestamp: Option<i64>,
     ) -> PyResult<Py<PyAny>> {
         let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
-
-        if let Err(error) = git_repository_scanner::scan_repository(
+        match git_repository_scanner::scan_repository(
+            &py,
             repository_path,
             branch_glob_pattern.unwrap_or("*"),
             from_timestamp.unwrap_or(0),
             &self.rules_manager,
             matches.clone(),
         ) {
-            Err(exceptions::PyRuntimeError::new_err(error.to_string()))
-        } else {
-            Ok(matches.lock().to_object(py))
+            Ok(_) => Ok(matches.lock().to_object(py)),
+            Err(error) => Err(error),
         }
     }
 
@@ -242,22 +241,26 @@ impl GitRepositoryScanner {
         branch_glob_pattern: Option<&str>,
         from_timestamp: Option<i64>,
     ) -> PyResult<Py<PyAny>> {
-        let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
+        let mut repository_full_path = PathBuf::from(repository_path);
+        repository_full_path.push(url.split('/').last().unwrap_or(""));
 
-        if let Err(error) = Repository::clone(url, repository_path) {
+        let mut builder = git2::build::RepoBuilder::new();
+        builder.bare(true);
+        if let Err(error) = builder.clone(url, repository_full_path.as_path()) {
             return Err(exceptions::PyRuntimeError::new_err(error.to_string()));
         };
 
-        if let Err(error) = git_repository_scanner::scan_repository(
+        let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
+        match git_repository_scanner::scan_repository(
+            &py,
             repository_path,
             branch_glob_pattern.unwrap_or("*"),
             from_timestamp.unwrap_or(0),
             &self.rules_manager,
             matches.clone(),
         ) {
-            Err(exceptions::PyRuntimeError::new_err(error.to_string()))
-        } else {
-            Ok(matches.lock().to_object(py))
+            Ok(_) => Ok(matches.lock().to_object(py)),
+            Err(error) => Err(error),
         }
     }
 }

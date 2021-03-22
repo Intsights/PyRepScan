@@ -1,20 +1,25 @@
 use crate::rules_manager;
 
 use chrono::prelude::*;
+use crossbeam_utils::thread as crossbeam_thread;
+use crossbeam::queue::SegQueue;
 use git2::{Oid, Repository, Delta};
-use git2::Error;
 use parking_lot::Mutex;
-use rayon::prelude::*;
+use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time;
 
 fn scan_commit_oid(
+    should_stop: &AtomicBool,
     git_repo: &Repository,
     oid: &Oid,
     rules_manager: &rules_manager::RulesManager,
     output_matches: Arc<Mutex<Vec<HashMap<&str, String>>>>,
-) -> Result<(), Error> {
+) -> Result<(), git2::Error> {
     let commit = git_repo.find_commit(*oid)?;
 
     let commit_parent_count = commit.parent_count();
@@ -34,6 +39,10 @@ fn scan_commit_oid(
     };
 
     for delta in commit_diff.deltas() {
+        if should_stop.load(Ordering::Relaxed) {
+            break;
+        }
+
         match delta.status() {
             Delta::Added | Delta::Modified => {},
             _ => continue,
@@ -119,7 +128,7 @@ fn scan_commit_oid(
 pub fn get_file_content(
     repository_path: &str,
     file_oid: &str,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>, git2::Error> {
     let git_repo = Repository::open(repository_path)?;
     let oid = Oid::from_str(file_oid)?;
     let blob = git_repo.find_blob(oid)?;
@@ -127,17 +136,14 @@ pub fn get_file_content(
     Ok(blob.content().to_vec())
 }
 
-pub fn scan_repository(
+fn get_oids(
     repository_path: &str,
     branch_glob_pattern: &str,
     from_timestamp: i64,
-    rules_manager: &rules_manager::RulesManager,
-    output_matches: Arc<Mutex<Vec<HashMap<&str, String>>>>,
-) -> Result<(), Error> {
+) -> Result<Vec<Oid>, git2::Error>{
     let git_repo = Repository::open(repository_path)?;
 
     let mut revwalk = git_repo.revwalk()?;
-
     revwalk.push_head()?;
     revwalk.set_sorting(git2::Sort::TIME)?;
     revwalk.push_glob(branch_glob_pattern)?;
@@ -153,22 +159,79 @@ pub fn scan_repository(
         }
     }
 
-    let chunk_size = (oids.len() as f64 / (num_cpus::get() * 5) as f64).ceil() as usize;
-    if !oids.is_empty() {
-        oids.par_chunks(chunk_size).for_each(
-            |oids| {
-                let git_repo = Repository::open(repository_path).unwrap();
-                for oid in oids {
-                    scan_commit_oid(
-                        &git_repo,
-                        oid,
-                        rules_manager,
-                        output_matches.clone()
-                    ).unwrap_or(());
-                }
-            },
-        );
+    Ok(oids)
+}
+
+pub fn scan_repository(
+    py: &Python,
+    repository_path: &str,
+    branch_glob_pattern: &str,
+    from_timestamp: i64,
+    rules_manager: &rules_manager::RulesManager,
+    output_matches: Arc<Mutex<Vec<HashMap<&str, String>>>>,
+) -> Result<(), PyErr> {
+    let oids_queue = Arc::new(SegQueue::new());
+    match get_oids(
+        repository_path,
+        branch_glob_pattern,
+        from_timestamp
+    ) {
+        Ok(oids) => {
+            for oid in oids {
+                oids_queue.push(oid);
+            }
+        },
+        Err(error) => {
+            return Err(pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+        },
     }
+    py.check_signals()?;
+
+    let mut py_signal_error: PyResult<()> = Ok(());
+
+    crossbeam_thread::scope(
+        |scope| {
+            let should_stop  = Arc::new(AtomicBool::new(false));
+
+            for _ in 0..num_cpus::get() {
+                let output_matches = output_matches.clone();
+                let oids_queue = oids_queue.clone();
+                let should_stop = should_stop.clone();
+                scope.spawn(
+                    move |_| {
+                        if let Ok(git_repo) = Repository::open(repository_path) {
+                            while !should_stop.load(Ordering::Relaxed) {
+                                if let Some(oid) = oids_queue.pop() {
+                                    scan_commit_oid(
+                                        &should_stop,
+                                        &git_repo,
+                                        &oid,
+                                        rules_manager,
+                                        output_matches.clone(),
+                                    ).unwrap_or(());
+                                } else {
+                                    break;
+                                }
+                            }
+                        };
+                    }
+                );
+            }
+
+            while !oids_queue.is_empty() {
+                py_signal_error = py.check_signals();
+                if py_signal_error.is_err() {
+                    should_stop.store(true, Ordering::Relaxed);
+
+                    break;
+                }
+
+                thread::sleep(time::Duration::from_millis(100));
+            }
+        }
+    ).unwrap_or(());
+
+    py_signal_error?;
 
     Ok(())
 }
