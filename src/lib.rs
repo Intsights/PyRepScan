@@ -2,6 +2,7 @@ mod git_repository_scanner;
 mod rules_manager;
 
 use parking_lot::Mutex;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -242,7 +243,7 @@ impl GitRepositoryScanner {
         from_timestamp: Option<i64>,
     ) -> PyResult<Py<PyAny>> {
         let mut repository_full_path = PathBuf::from(repository_path);
-        repository_full_path.push(url.split('/').last().unwrap_or(""));
+        repository_full_path.push(utf8_percent_encode(url, NON_ALPHANUMERIC).to_string());
 
         let mut builder = git2::build::RepoBuilder::new();
         builder.bare(true);
@@ -253,7 +254,7 @@ impl GitRepositoryScanner {
         let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
         match git_repository_scanner::scan_repository(
             &py,
-            repository_path,
+            &repository_full_path.to_string_lossy(),
             branch_glob_pattern.unwrap_or("*"),
             from_timestamp.unwrap_or(0),
             &self.rules_manager,
