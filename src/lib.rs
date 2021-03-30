@@ -2,12 +2,11 @@ mod git_repository_scanner;
 mod rules_manager;
 
 use parking_lot::Mutex;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 
 /// GitRepositoryScanner class
@@ -242,19 +241,16 @@ impl GitRepositoryScanner {
         branch_glob_pattern: Option<&str>,
         from_timestamp: Option<i64>,
     ) -> PyResult<Py<PyAny>> {
-        let mut repository_full_path = PathBuf::from(repository_path);
-        repository_full_path.push(utf8_percent_encode(url, NON_ALPHANUMERIC).to_string());
-
         let mut builder = git2::build::RepoBuilder::new();
         builder.bare(true);
-        if let Err(error) = builder.clone(url, repository_full_path.as_path()) {
+        if let Err(error) = builder.clone(url, Path::new(repository_path).as_ref()) {
             return Err(exceptions::PyRuntimeError::new_err(error.to_string()));
         };
 
         let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
         match git_repository_scanner::scan_repository(
             &py,
-            &repository_full_path.to_string_lossy(),
+            repository_path,
             branch_glob_pattern.unwrap_or("*"),
             from_timestamp.unwrap_or(0),
             &self.rules_manager,
