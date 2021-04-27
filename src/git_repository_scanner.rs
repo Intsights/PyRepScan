@@ -1,6 +1,7 @@
 use crate::rules_manager;
 
 use chrono::prelude::*;
+use crossbeam_utils::atomic::AtomicCell;
 use crossbeam_utils::thread as crossbeam_thread;
 use crossbeam::queue::SegQueue;
 use git2::{Oid, Repository, Delta};
@@ -9,12 +10,11 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time;
 
 fn scan_commit_oid(
-    should_stop: &AtomicBool,
+    should_stop: &AtomicCell<bool>,
     git_repo: &Repository,
     oid: &Oid,
     rules_manager: &rules_manager::RulesManager,
@@ -39,7 +39,7 @@ fn scan_commit_oid(
     };
 
     for delta in commit_diff.deltas() {
-        if should_stop.load(Ordering::Relaxed) {
+        if should_stop.load() {
             break;
         }
 
@@ -80,7 +80,6 @@ fn scan_commit_oid(
         if let Some(scan_matches) = scan_matches {
             for scan_match in scan_matches.iter() {
                 let mut match_hashmap = HashMap::with_capacity(9);
-                let commit_date = Utc.timestamp(commit.time().seconds(), 0);
                 match_hashmap.insert(
                     "commit_id",
                     commit.id().to_string(),
@@ -91,7 +90,7 @@ fn scan_commit_oid(
                 );
                 match_hashmap.insert(
                     "commit_time",
-                    commit_date.format("%Y-%m-%dT%H:%M:%S").to_string(),
+                    Utc.timestamp(commit.time().seconds(), 0).format("%Y-%m-%dT%H:%M:%S").to_string(),
                 );
                 match_hashmap.insert(
                     "author_name",
@@ -185,22 +184,19 @@ pub fn scan_repository(
             return Err(pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
         },
     }
+
     py.check_signals()?;
 
     let mut py_signal_error: PyResult<()> = Ok(());
 
+    let should_stop  = AtomicCell::new(false);
     crossbeam_thread::scope(
         |scope| {
-            let should_stop  = Arc::new(AtomicBool::new(false));
-
             for _ in 0..num_cpus::get() {
-                let output_matches = output_matches.clone();
-                let oids_queue = oids_queue.clone();
-                let should_stop = should_stop.clone();
                 scope.spawn(
-                    move |_| {
+                    |_| {
                         if let Ok(git_repo) = Repository::open(repository_path) {
-                            while !should_stop.load(Ordering::Relaxed) {
+                            while !should_stop.load() {
                                 if let Some(oid) = oids_queue.pop() {
                                     scan_commit_oid(
                                         &should_stop,
@@ -221,7 +217,7 @@ pub fn scan_repository(
             while !oids_queue.is_empty() {
                 py_signal_error = py.check_signals();
                 if py_signal_error.is_err() {
-                    should_stop.store(true, Ordering::Relaxed);
+                    should_stop.store(true);
 
                     break;
                 }

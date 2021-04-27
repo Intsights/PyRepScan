@@ -183,25 +183,21 @@ impl RulesManager {
         &self,
         file_path: &str,
     ) -> bool {
-        let skip_file = self.file_extensions_to_skip.iter().any(
+        if self.file_extensions_to_skip.iter().any(
             |file_extension_to_skip| {
                 file_path.ends_with(file_extension_to_skip)
             }
-        );
-        if skip_file {
-            return false;
-        }
-
-        let skip_file = self.file_paths_to_skip.iter().any(
+        ) {
+            false
+        } else if self.file_paths_to_skip.iter().any(
             |file_path_to_skip| {
                 file_path.contains(file_path_to_skip)
             }
-        );
-        if skip_file {
-            return false;
+        ) {
+            false
+        } else {
+            true
         }
-
-        true
     }
 
     #[text_signature = "(file_path, content, /)"]
@@ -213,7 +209,7 @@ impl RulesManager {
         let mut scan_matches = Vec::new();
 
         for file_path_rule in self.file_path_rules.iter() {
-            for _match_text in file_path_rule.regex.find_iter(file_path) {
+            if file_path_rule.regex.is_match(file_path) {
                 let mut scan_match = HashMap::<&str, String>::new();
                 scan_match.insert("rule_name", file_path_rule.name.clone());
                 scan_match.insert("match_text", file_path.to_string());
