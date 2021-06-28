@@ -188,16 +188,18 @@ impl RulesManager {
                 file_path.ends_with(file_extension_to_skip)
             }
         ) {
-            false
-        } else if self.file_paths_to_skip.iter().any(
+            return false;
+        }
+
+        if self.file_paths_to_skip.iter().any(
             |file_path_to_skip| {
                 file_path.contains(file_path_to_skip)
             }
         ) {
-            false
-        } else {
-            true
+            return false;
         }
+
+        true
     }
 
     #[text_signature = "(file_path, content, /)"]

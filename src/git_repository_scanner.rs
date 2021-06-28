@@ -148,12 +148,10 @@ fn get_oids(
     revwalk.push_glob(branch_glob_pattern)?;
 
     let mut oids = Vec::new();
-    for oid in revwalk {
-        if let Ok(oid) = oid {
-            if let Ok(commit) = git_repo.find_commit(oid) {
-                if commit.time().seconds() >= from_timestamp {
-                    oids.push(oid);
-                }
+    for oid in revwalk.flatten() {
+        if let Ok(commit) = git_repo.find_commit(oid) {
+            if commit.time().seconds() >= from_timestamp {
+                oids.push(oid);
             }
         }
     }
