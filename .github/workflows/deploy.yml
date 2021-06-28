@@ -23,23 +23,13 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Publish Package
+      - name: Build & Publish to PyPi
         if: matrix.os != 'windows-latest'
-        uses: messense/maturin-action@v1
-        with:
-          maturin-version: latest
-          command: publish
-          manylinux: 2014
-          args: --username=__token__ --no-sdist --interpreter=python${{ matrix.python-version }}
+        run: maturin publish --username __token__ --no-sdist --interpreter python${{ matrix.python-version }} --manylinux=2014 --skip-auditwheel
         env:
           MATURIN_PASSWORD: ${{ secrets.pypi_password }}
-      - name: Publish Package
+      - name: Build & Publish to PyPi
         if: matrix.os == 'windows-latest'
-        uses: messense/maturin-action@v1
-        with:
-          maturin-version: latest
-          command: publish
-          manylinux: 2014
-          args: --username=__token__ --no-sdist --interpreter=python
+                run: maturin publish --username=__token__ --no-sdist --interpreter=python --manylinux=2014 --skip-auditwheel
         env:
           MATURIN_PASSWORD: ${{ secrets.pypi_password }}
