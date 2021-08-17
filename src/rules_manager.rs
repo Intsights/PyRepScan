@@ -64,7 +64,7 @@ impl RulesManager {
 
         let mut whitelist_regexes = Vec::new();
         for whitelist_pattern in whitelist_patterns.iter() {
-            let whitelist_regex = match Regex::new(&whitelist_pattern) {
+            let whitelist_regex = match Regex::new(whitelist_pattern) {
                 Ok(whitelist_regex) => whitelist_regex,
                 Err(error) => {
                     return Err(
@@ -86,7 +86,7 @@ impl RulesManager {
 
         let mut blacklist_regexes = Vec::new();
         for blacklist_pattern in blacklist_patterns.iter() {
-            let blacklist_regex = match Regex::new(&blacklist_pattern) {
+            let blacklist_regex = match Regex::new(blacklist_pattern) {
                 Ok(blacklist_regex) => blacklist_regex,
                 Err(error) => {
                     return Err(
