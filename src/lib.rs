@@ -18,7 +18,6 @@ use std::sync::Arc;
 /// example:
 ///     grs = pyrepscan.GitRepositoryScanner()
 #[pyclass]
-#[text_signature = "()"]
 #[derive(Default)]
 struct GitRepositoryScanner {
     rules_manager: rules_manager::RulesManager,
@@ -57,7 +56,6 @@ impl GitRepositoryScanner {
     ///             "(?:test|example|xxx|empty)",
     ///         ],
     ///     )
-    #[text_signature = "(name, pattern, whitelist_patterns, blacklist_patterns, /)"]
     fn add_content_rule(
         &mut self,
         name: String,
@@ -88,7 +86,6 @@ impl GitRepositoryScanner {
     ///         name="Rule #2",
     ///         pattern=r".*\.(?:pem|cer)",
     ///     )
-    #[text_signature = "(name, pattern, /)"]
     fn add_file_path_rule(
         &mut self,
         name: String,
@@ -117,7 +114,6 @@ impl GitRepositoryScanner {
     ///     grs.add_file_extension_to_skip(
     ///         file_extension="tar.gz",
     ///     )
-    #[text_signature = "(file_extension, /)"]
     fn add_file_extension_to_skip(
         &mut self,
         file_extension: String,
@@ -141,7 +137,6 @@ impl GitRepositoryScanner {
     ///     grs.add_file_path_to_skip(
     ///         file_extension="example",
     ///     )
-    #[text_signature = "(file_path, /)"]
     fn add_file_path_to_skip(
         &mut self,
         file_path: String,
@@ -163,7 +158,6 @@ impl GitRepositoryScanner {
     ///         repository_path="/path/to/repository",
     ///         file_oid="6b584e8ece562ebffc15d38808cd6b98fc3d97ea",
     ///     )
-    #[text_signature = "(repository_path, file_oid, /)"]
     fn get_file_content(
         &mut self,
         py: Python,
@@ -192,7 +186,6 @@ impl GitRepositoryScanner {
     ///         repository_path="/path/to/repository",
     ///         branch_glob_pattern="*",
     ///     )
-    #[text_signature = "(repository_path, branch_glob_pattern, from_timestamp, /)"]
     fn scan(
         &self,
         py: Python,
@@ -232,7 +225,6 @@ impl GitRepositoryScanner {
     ///         repository_path="/path/to/repository",
     ///         branch_glob_pattern="*",
     ///     )
-    #[text_signature = "(url, repository_path, branch_glob_pattern, from_timestamp, /)"]
     fn scan_from_url(
         &self,
         py: Python,

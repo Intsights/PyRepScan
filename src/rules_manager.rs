@@ -16,7 +16,6 @@ struct FilePathRule {
 }
 
 #[pyclass]
-#[text_signature = "()"]
 #[derive(Default)]
 pub struct RulesManager {
     file_extensions_to_skip: HashSet<String>,
@@ -32,7 +31,6 @@ impl RulesManager {
         RulesManager::default()
     }
 
-    #[text_signature = "(name, pattern, whitelist_patterns, blacklist_patterns, /)"]
     pub fn add_content_rule(
         &mut self,
         name: String,
@@ -119,7 +117,6 @@ impl RulesManager {
         Ok(())
     }
 
-    #[text_signature = "(name, pattern, /)"]
     pub fn add_file_path_rule(
         &mut self,
         name: String,
@@ -148,7 +145,6 @@ impl RulesManager {
         Ok(())
     }
 
-    #[text_signature = "(file_extension, /)"]
     pub fn add_file_extension_to_skip(
         &mut self,
         file_extension: String,
@@ -163,7 +159,6 @@ impl RulesManager {
         Ok(())
     }
 
-    #[text_signature = "(file_path, /)"]
     pub fn add_file_path_to_skip(
         &mut self,
         file_path: String,
@@ -178,7 +173,6 @@ impl RulesManager {
         Ok(())
     }
 
-    #[text_signature = "(file_path, /)"]
     pub fn should_scan_file_path(
         &self,
         file_path: &str,
@@ -202,7 +196,6 @@ impl RulesManager {
         true
     }
 
-    #[text_signature = "(file_path, content, /)"]
     pub fn scan_file(
         &self,
         file_path: &str,
@@ -248,7 +241,6 @@ impl RulesManager {
         }
     }
 
-    #[text_signature = "(content, pattern, /)"]
     pub fn check_pattern(
         &mut self,
         content: String,
