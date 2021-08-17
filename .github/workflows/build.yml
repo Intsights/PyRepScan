@@ -25,7 +25,8 @@ jobs:
         with:
           maturin-version: latest
           command: build
-          args: --release --no-sdist --interpreter python${{ matrix.python-version }} --manylinux=2014 --skip-auditwheel
+          manylinux: 2014
+          args: --release --no-sdist --interpreter python${{ matrix.python-version }} --skip-auditwheel
       - name: Build & Publish to PyPi
         run: |
           python -m pip install --upgrade twine auditwheel;
