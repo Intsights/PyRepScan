@@ -21,15 +21,13 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Install maturin
+      - name: Install dependencies
         run: |
-          sudo apt install -y libssl-dev
-      - uses: messense/maturin-action@v1
-        with:
-          maturin-version: latest
-          command: build
-          manylinux: 2014
-          args: --release --no-sdist --interpreter python${{ matrix.python-version }} --skip-auditwheel
+          python -m pip install --upgrade pip maturin
+      - name: Build & Publish to PyPi
+        run: maturin build --release --no-sdist --interpreter python${{matrix.python_version}} --manylinux=2014 --skip-auditwheel
+        env:
+          MATURIN_PASSWORD: ${{ secrets.pypi_password }}
       - name: Build & Publish to PyPi
         run: |
           python -m pip install --upgrade twine auditwheel;
