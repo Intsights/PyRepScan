@@ -21,6 +21,9 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Install maturin
+        run: |
+          apt install -y libssl-dev
       - uses: messense/maturin-action@v1
         with:
           maturin-version: latest

@@ -44,6 +44,7 @@ crossbeam-utils = "0.8"
 
 [dependencies.git2]
 version = "0.13"
+features = ["https"]
 
 [dependencies.pyo3]
 version = "0.14.5"
