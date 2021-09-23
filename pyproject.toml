@@ -9,7 +9,6 @@ sdist-include = [
     "pyrepscan/*.py",
     "pyrepscan/*.pyi"
 ]
-manylinux = "2014"
 strip = true
 
 [tool.poetry]
