@@ -31,6 +31,6 @@ jobs:
       - name: Build & Publish to PyPi
         run: |
           python -m pip install --upgrade twine auditwheel;
-          auditwheel repair target/wheels/*.whl;
+          auditwheel repair --plat manylinux_2_17_x86_64 target/wheels/*.whl;
         env:
           TWINE_PASSWORD: ${{ secrets.pypi_password }}
