@@ -24,7 +24,6 @@ jobs:
       - uses: messense/maturin-action@v1
         with:
           maturin-version: latest
-          container: off
           command: build
           manylinux: 2_24
           args: --release --no-sdist --interpreter python${{matrix.python_version}} --skip-auditwheel
