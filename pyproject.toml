@@ -9,7 +9,6 @@ sdist-include = [
     "pyrepscan/*.py",
     "pyrepscan/*.pyi"
 ]
-manylinux = "2014"
 strip = true
 
 [tool.poetry]
@@ -45,7 +44,7 @@ python = "^3.6"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"
-gitpython = "*"
+gitpython = { git = "https://github.com/gitpython-developers/GitPython" }
 wheel = "*"
 pytest-runner = "*"
 maturin = "*"

@@ -33,14 +33,14 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Run image
-        uses: abatilo/actions-poetry@v2.0.0
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+      - name: Install Poetry
+        uses: abatilo/actions-poetry@v2.0.0
       - name: Install dependencies
         run: poetry install
       - name: Build Python package

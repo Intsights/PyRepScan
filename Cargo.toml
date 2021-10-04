@@ -42,11 +42,16 @@ parking_lot = "0.11"
 crossbeam = "0.8"
 crossbeam-utils = "0.8"
 
+[dependencies.libgit2-sys]
+version = "0.12"
+features = ["https"]
+
 [dependencies.git2]
 version = "0.13"
+features = ["vendored-openssl"]
 
 [dependencies.pyo3]
-version = "0.14.2"
+version = "0.14.5"
 features = ["extension-module"]
 
 [profile.release]
