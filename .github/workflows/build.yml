@@ -47,5 +47,3 @@ jobs:
         run: poetry run maturin develop
       - name: Test
         run: poetry run pytest -Werror tests
-      - name: Build Python wheel
-        run: poetry run maturin build --manylinux=2_24 --skip-auditwheel --no-sdist
