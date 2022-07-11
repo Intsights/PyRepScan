@@ -1,6 +1,7 @@
 mod git_repository_scanner;
 mod rules_manager;
 
+use git2::{Oid, Repository};
 use parking_lot::Mutex;
 use pyo3::exceptions;
 use pyo3::prelude::*;
@@ -158,16 +159,27 @@ impl GitRepositoryScanner {
     ///         repository_path="/path/to/repository",
     ///         file_oid="6b584e8ece562ebffc15d38808cd6b98fc3d97ea",
     ///     )
-    fn get_file_content(
+    fn get_file_content<'py>(
         &mut self,
-        py: Python,
+        py: Python<'py>,
         repository_path: String,
         file_oid: String,
-    ) -> PyResult<Py<PyBytes>> {
-        match git_repository_scanner::get_file_content(&repository_path, &file_oid) {
-            Ok(content) => Ok(PyBytes::new(py, &content).into()),
-            Err(error) => Err(exceptions::PyRuntimeError::new_err(error.to_string())),
-        }
+    ) -> PyResult<&'py PyBytes> {
+        let git_repo = Repository::open(repository_path).map_err(
+            |error| exceptions::PyRuntimeError::new_err(error.to_string())
+        )?;
+
+        let oid = Oid::from_str(&file_oid).map_err(
+            |error| exceptions::PyRuntimeError::new_err(error.to_string())
+        )?;
+
+        let blob = git_repo.find_blob(oid).map_err(
+            |error| exceptions::PyRuntimeError::new_err(error.to_string())
+        )?;
+
+        let content = PyBytes::new(py, blob.content());
+
+        Ok(content)
     }
 
     /// Scan a git repository for secrets. Rules shuld be loaded before calling this function.
@@ -192,7 +204,7 @@ impl GitRepositoryScanner {
         repository_path: &str,
         branch_glob_pattern: Option<&str>,
         from_timestamp: Option<i64>,
-    ) -> PyResult<Py<PyAny>> {
+    ) -> PyResult<PyObject> {
         let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
         match git_repository_scanner::scan_repository(
             &py,
@@ -232,25 +244,15 @@ impl GitRepositoryScanner {
         repository_path: &str,
         branch_glob_pattern: Option<&str>,
         from_timestamp: Option<i64>,
-    ) -> PyResult<Py<PyAny>> {
+    ) -> PyResult<PyObject> {
         let mut builder = git2::build::RepoBuilder::new();
         builder.bare(true);
+
         if let Err(error) = builder.clone(url, Path::new(repository_path).as_ref()) {
             return Err(exceptions::PyRuntimeError::new_err(error.to_string()));
         };
 
-        let matches = Arc::new(Mutex::new(Vec::<HashMap<&str, String>>::with_capacity(10000)));
-        match git_repository_scanner::scan_repository(
-            &py,
-            repository_path,
-            branch_glob_pattern.unwrap_or("*"),
-            from_timestamp.unwrap_or(0),
-            &self.rules_manager,
-            matches.clone(),
-        ) {
-            Ok(_) => Ok(matches.lock().to_object(py)),
-            Err(error) => Err(error),
-        }
+        self.scan(py, repository_path, branch_glob_pattern, from_timestamp)
     }
 }
 

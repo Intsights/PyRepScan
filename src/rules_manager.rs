@@ -1,4 +1,4 @@
-use pyo3::exceptions;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
@@ -40,7 +40,7 @@ impl RulesManager {
     ) -> PyResult<()> {
         if name.is_empty() || pattern.is_empty() {
             return Err(
-                exceptions::PyRuntimeError::new_err("Rule name and pattern can not be empty")
+                PyRuntimeError::new_err("Rule name and pattern can not be empty")
             )
         }
 
@@ -48,16 +48,16 @@ impl RulesManager {
             Ok(regex) => regex,
             Err(error) => {
                 return Err(
-                    exceptions::PyRuntimeError::new_err(
-                        format!("Invalid regex pattern: {}", error)
+                    PyRuntimeError::new_err(
+                        format!("Invalid regex pattern: {error}")
                     )
                 )
             },
         };
         if regex.captures_len() != 2 {
             return Err(
-                exceptions::PyRuntimeError::new_err(
-                    format!("Matching regex pattern must have exactly one capturing group: {}", pattern)
+                PyRuntimeError::new_err(
+                    format!("Matching regex pattern must have exactly one capturing group: {pattern}")
                 )
             );
         }
@@ -68,16 +68,16 @@ impl RulesManager {
                 Ok(whitelist_regex) => whitelist_regex,
                 Err(error) => {
                     return Err(
-                        exceptions::PyRuntimeError::new_err(
-                            format!("Invalid whitelist regex pattern: {}", error)
+                        PyRuntimeError::new_err(
+                            format!("Invalid whitelist regex pattern: {error}")
                         )
                     )
                 },
             };
             if whitelist_regex.captures_len() != 1 {
                 return Err(
-                    exceptions::PyRuntimeError::new_err(
-                        format!("Whitelist regex pattern must not have a capturing group: {}", whitelist_pattern)
+                    PyRuntimeError::new_err(
+                        format!("Whitelist regex pattern must not have a capturing group: {whitelist_pattern}")
                     )
                 );
             }
@@ -90,16 +90,16 @@ impl RulesManager {
                 Ok(blacklist_regex) => blacklist_regex,
                 Err(error) => {
                     return Err(
-                        exceptions::PyRuntimeError::new_err(
-                            format!("Invalid blacklist regex pattern: {}", error)
+                        PyRuntimeError::new_err(
+                            format!("Invalid blacklist regex pattern: {error}")
                         )
                     )
                 },
             };
             if blacklist_regex.captures_len() != 1 {
                 return Err(
-                    exceptions::PyRuntimeError::new_err(
-                        format!("Blacklist regex pattern must not have a capturing group: {}", blacklist_pattern)
+                    PyRuntimeError::new_err(
+                        format!("Blacklist regex pattern must not have a capturing group: {blacklist_pattern}")
                     )
                 );
             }
@@ -124,7 +124,7 @@ impl RulesManager {
     ) -> PyResult<()> {
         if name.is_empty() || pattern.is_empty() {
             return Err(
-                exceptions::PyRuntimeError::new_err("Rule name and pattern can not be empty")
+                PyRuntimeError::new_err("Rule name and pattern can not be empty")
             )
         }
 
@@ -132,8 +132,8 @@ impl RulesManager {
             Ok(regex) => regex,
             Err(error) => {
                 return Err(
-                    exceptions::PyRuntimeError::new_err(
-                        format!("Invalid regex pattern: {}", error)
+                    PyRuntimeError::new_err(
+                        format!("Invalid regex pattern: {error}")
                     )
                 )
             }
@@ -151,7 +151,7 @@ impl RulesManager {
     ) -> PyResult<()> {
         if file_extension.is_empty() {
             return Err(
-                exceptions::PyRuntimeError::new_err("File extension can not be empty")
+                PyRuntimeError::new_err("File extension can not be empty")
             )
         }
         self.file_extensions_to_skip.insert(file_extension.to_ascii_lowercase());
@@ -165,7 +165,7 @@ impl RulesManager {
     ) -> PyResult<()> {
         if file_path.is_empty() {
             return Err(
-                exceptions::PyRuntimeError::new_err("File path can not be empty")
+                PyRuntimeError::new_err("File path can not be empty")
             )
         }
         self.file_paths_to_skip.insert(file_path.to_ascii_lowercase());
@@ -250,16 +250,16 @@ impl RulesManager {
             Ok(regex) => regex,
             Err(error) => {
                 return Err(
-                    exceptions::PyRuntimeError::new_err(
-                        format!("Invalid regex pattern: {}", error)
+                    PyRuntimeError::new_err(
+                        format!("Invalid regex pattern: {error}")
                     )
                 )
             },
         };
         if regex.captures_len() != 2 {
             return Err(
-                exceptions::PyRuntimeError::new_err(
-                    format!("Matching regex pattern must have exactly one capturing group: {}", pattern)
+                PyRuntimeError::new_err(
+                    format!("Matching regex pattern must have exactly one capturing group: {pattern}")
                 )
             );
         }

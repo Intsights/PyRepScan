@@ -12,3 +12,4 @@ results = grs.scan(
     repository_path='/path/to/repository',
     branch_glob_pattern='*',
 )
+print(len(results))

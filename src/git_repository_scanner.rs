@@ -3,9 +3,10 @@ use crate::rules_manager;
 use chrono::prelude::*;
 use crossbeam_utils::atomic::AtomicCell;
 use crossbeam_utils::thread as crossbeam_thread;
-use crossbeam::queue::SegQueue;
+use crossbeam::queue::ArrayQueue;
 use git2::{Oid, Repository, Delta};
 use parking_lot::Mutex;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
@@ -124,18 +125,7 @@ fn scan_commit_oid(
     Ok(())
 }
 
-pub fn get_file_content(
-    repository_path: &str,
-    file_oid: &str,
-) -> Result<Vec<u8>, git2::Error> {
-    let git_repo = Repository::open(repository_path)?;
-    let oid = Oid::from_str(file_oid)?;
-    let blob = git_repo.find_blob(oid)?;
-
-    Ok(blob.content().to_vec())
-}
-
-fn get_oids(
+fn get_commit_oids(
     repository_path: &str,
     branch_glob_pattern: &str,
     from_timestamp: i64,
@@ -166,40 +156,46 @@ pub fn scan_repository(
     from_timestamp: i64,
     rules_manager: &rules_manager::RulesManager,
     output_matches: Arc<Mutex<Vec<HashMap<&str, String>>>>,
-) -> Result<(), PyErr> {
-    let oids_queue = Arc::new(SegQueue::new());
-    match get_oids(
+) -> PyResult<()> {
+    let commit_oids_queue;
+
+    match get_commit_oids(
         repository_path,
         branch_glob_pattern,
         from_timestamp
     ) {
-        Ok(oids) => {
-            for oid in oids {
-                oids_queue.push(oid);
+        Ok(commit_oids) => {
+            if commit_oids.is_empty() {
+               return Ok(());
+            }
+
+            commit_oids_queue = ArrayQueue::new(commit_oids.len());
+            for commit_oid in commit_oids {
+                commit_oids_queue.push(commit_oid).unwrap();
             }
         },
         Err(error) => {
-            return Err(pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+            return Err(PyRuntimeError::new_err(error.to_string()))
         },
     }
-
-    py.check_signals()?;
 
     let mut py_signal_error: PyResult<()> = Ok(());
 
     let should_stop  = AtomicCell::new(false);
+    let number_of_cores = std::thread::available_parallelism().unwrap().get();
+
     crossbeam_thread::scope(
         |scope| {
-            for _ in 0..num_cpus::get() {
+            for _ in 0..number_of_cores {
                 scope.spawn(
                     |_| {
                         if let Ok(git_repo) = Repository::open(repository_path) {
                             while !should_stop.load() {
-                                if let Some(oid) = oids_queue.pop() {
+                                if let Some(commit_oid) = commit_oids_queue.pop() {
                                     scan_commit_oid(
                                         &should_stop,
                                         &git_repo,
-                                        &oid,
+                                        &commit_oid,
                                         rules_manager,
                                         output_matches.clone(),
                                     ).unwrap_or(());
@@ -212,7 +208,7 @@ pub fn scan_repository(
                 );
             }
 
-            while !oids_queue.is_empty() {
+            while !commit_oids_queue.is_empty() {
                 py_signal_error = py.check_signals();
                 if py_signal_error.is_err() {
                     should_stop.store(true);
@@ -223,7 +219,7 @@ pub fn scan_repository(
                 thread::sleep(time::Duration::from_millis(100));
             }
         }
-    ).unwrap_or(());
+    ).unwrap_or_default();
 
     py_signal_error?;
 
