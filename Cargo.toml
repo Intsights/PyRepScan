@@ -35,12 +35,12 @@ name = "pyrepscan"
 crate-type = ["cdylib"]
 
 [dependencies]
-regex = "1.6.0"
+aho-corasick = "0.7.18"
 chrono = "0.4.19"
-num_cpus = "1.13.1"
-parking_lot = "0.12.1"
 crossbeam = "0.8.1"
 crossbeam-utils = "0.8.10"
+parking_lot = "0.12.1"
+regex = "1.6.0"
 
 [dependencies.libgit2-sys]
 version = "0.13.4"

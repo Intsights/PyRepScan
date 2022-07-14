@@ -1,7 +1,9 @@
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::*;
-use regex::Regex;
+use std::path::Path;
 use std::collections::{HashMap, HashSet};
+use regex::Regex;
+use pyo3::prelude::*;
+use pyo3::exceptions::PyRuntimeError;
+use aho_corasick::AhoCorasick;
 
 struct ContentRule {
     name: String,
@@ -16,19 +18,31 @@ struct FilePathRule {
 }
 
 #[pyclass]
-#[derive(Default)]
 pub struct RulesManager {
     file_extensions_to_skip: HashSet<String>,
-    file_paths_to_skip: HashSet<String>,
+    file_paths_to_skip: Vec<String>,
+    file_paths_to_skip_ac: Option<AhoCorasick>,
     content_rules: Vec<ContentRule>,
     file_path_rules: Vec<FilePathRule>,
+}
+
+impl Default for RulesManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[pymethods]
 impl RulesManager {
     #[new]
     pub fn new() -> Self {
-        RulesManager::default()
+        RulesManager {
+            file_extensions_to_skip: HashSet::default(),
+            file_paths_to_skip: Vec::default(),
+            file_paths_to_skip_ac: None,
+            content_rules: Vec::default(),
+            file_path_rules: Vec::default(),
+        }
     }
 
     pub fn add_content_rule(
@@ -168,7 +182,12 @@ impl RulesManager {
                 PyRuntimeError::new_err("File path can not be empty")
             )
         }
-        self.file_paths_to_skip.insert(file_path.to_ascii_lowercase());
+        self.file_paths_to_skip.push(file_path.to_ascii_lowercase());
+        self.file_paths_to_skip_ac = Some(
+            AhoCorasick::new_auto_configured(
+                self.file_paths_to_skip.as_slice()
+            )
+        );
 
         Ok(())
     }
@@ -177,20 +196,16 @@ impl RulesManager {
         &self,
         file_path: &str,
     ) -> bool {
-        if self.file_extensions_to_skip.iter().any(
-            |file_extension_to_skip| {
-                file_path.ends_with(file_extension_to_skip)
+        if let Some(file_extension) = Path::new(file_path).extension() {
+            if self.file_extensions_to_skip.contains(file_extension.to_string_lossy().as_ref()) {
+                return false;
             }
-        ) {
-            return false;
         }
 
-        if self.file_paths_to_skip.iter().any(
-            |file_path_to_skip| {
-                file_path.contains(file_path_to_skip)
+        if let Some(file_paths_to_skip_patterns) = &self.file_paths_to_skip_ac {
+            if file_paths_to_skip_patterns.is_match(file_path) {
+                return false;
             }
-        ) {
-            return false;
         }
 
         true
