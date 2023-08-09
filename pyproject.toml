@@ -1,3 +1,26 @@
+[project]
+name = "pyrepscan"
+version = "0.12.0"
+description = "A Git Repository Secrets Scanner written in Rust"
+authors = [
+  {email = "gal@intsights.com"},
+  {name = "Gal Ben David"}
+]
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Rust",
+]
+
 [build-system]
 requires = ["maturin>=0.12,<0.13"]
 build-backend = "maturin"
