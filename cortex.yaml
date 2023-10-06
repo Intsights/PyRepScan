@@ -1,0 +1,15 @@
+---
+info:
+  title: Pyrepscan
+  description: A Git Repository Secrets Scanner written in Rust
+  x-cortex-git:
+    github:
+      alias: intsightsorg
+      repository: Intsights/PyRepScan
+  x-cortex-tag: pyrepscan
+  x-cortex-type: service
+  x-cortex-domain-parents:
+  - tag: threatintel-rd
+openapi: 3.0.1
+servers:
+- url: "/"
