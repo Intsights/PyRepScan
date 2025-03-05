@@ -9,7 +9,10 @@ info:
   x-cortex-tag: pyrepscan
   x-cortex-type: service
   x-cortex-domain-parents:
-  - tag: threatintel
+  - tag: threatintel-brand-security
+  x-cortex-groups:
+  - exposure:external-ship
+  - target:library
 openapi: 3.0.1
 servers:
 - url: "/"
