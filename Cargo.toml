@@ -29,7 +29,7 @@ parking_lot = "0.12.1"
 regex = "1.6.0"
 
 [dependencies.libgit2-sys]
-version = "0.13.4"
+version = "0.16.2"
 features = ["https"]
 
 [dependencies.git2]
