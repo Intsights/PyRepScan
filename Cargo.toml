@@ -21,7 +21,7 @@ name = "pyrepscan"
 crate-type = ["cdylib"]
 
 [dependencies]
-aho-corasick = "0.7.18"
+aho-corasick = "1.0.0"
 chrono = "0.4.19"
 crossbeam = "0.8.1"
 crossbeam-utils = "0.8.10"
