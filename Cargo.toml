@@ -33,7 +33,7 @@ version = "0.13.4"
 features = ["https"]
 
 [dependencies.git2]
-version = "0.14.4"
+version = "0.20.4"
 features = ["vendored-openssl"]
 
 [dependencies.pyo3]
